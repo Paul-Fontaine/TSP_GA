@@ -68,7 +68,7 @@ class TestGraphGeneration(unittest.TestCase):
 
 
 class TestGraphCSV(unittest.TestCase):
-    CSV_PATH = "fichiers_csv_exemple/graph_5.csv"
+    CSV_PATH = "fichiers_csv_exemples/graph_5.csv"
 
     def tearDown(self):
         # nettoie le fichier créé si présent
