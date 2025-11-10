@@ -49,13 +49,8 @@ class Route:
         return self.ordre[index]
     
     def ajouter_lieu(self, lieu_index: int):
-        """Ajoute un lieu avant le retour au point de départ (dernier élément)."""
-        if len(self.ordre) < 2:
-            # Cas d'une route vide ou mal initialisée
-            self.ordre = [0, lieu_index, 0]
-        else:
-            # Insère avant le dernier 0 (retour)
-            self.ordre.insert(-1, lieu_index)
+        """Ajoute un lieu à la fin de la route."""
+        self.ordre.append(lieu_index)
         
     def inserer_lieu(self, index, position):
         """Insère un lieu à une position donnée."""
