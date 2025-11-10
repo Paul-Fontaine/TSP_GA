@@ -41,6 +41,12 @@ class Route:
     """Représente un ordre de visite, avec contrainte 0 ... 0 (départ/arrivée)."""
     def __init__(self, ordre):
         self.ordre = list(ordre)
+
+    def __len__(self):
+        return len(self.ordre)
+
+    def __getitem__(self, index):
+        return self.ordre[index]
     
     def ajouter_lieu(self, lieu_index: int):
         """Ajoute un lieu avant le retour au point de départ (dernier élément)."""
@@ -61,6 +67,14 @@ class Route:
         """Supprime un lieu (sauf le départ et l’arrivée)."""
         if index in self.ordre[1:-1]:
             self.ordre.remove(index)
+
+    def reordonner(self):
+        """Réorganise la route pour commencer et finir à 0."""
+        if 0 not in self.ordre:
+            raise ValueError("La route doit contenir le lieu de départ/arrivée (0).")
+        idx_zero = self.ordre.index(0)
+        nouvelle_ordre = self.ordre[idx_zero:] + self.ordre[1:idx_zero + 1]
+        self.ordre = nouvelle_ordre
         
 
     def __repr__(self):
