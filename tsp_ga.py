@@ -12,7 +12,7 @@ class TSP_GA:
         self.graph: Graph = graph
         self.affichage: Affichage = affichage
         self.population: list[Route] = self._creer_pop_initiale(10)
-        self.population.sort(key=lambda r: self.graph.calcul_distance_route(r))
+        self.population.sort()
         self.best_route: Route = self.population[0]
 
     def _creer_pop_initiale(self, taille_pop: int) -> list[Route]:
