@@ -19,6 +19,7 @@ class TSP_GA:
         population = []
         for i in range(taille_pop):
             route = self.route_plus_proche_voisin(depart=i % self.graph.N)
+            route.distance = self.graph.calcul_distance_route(route)
             population.append(route)
         return population
 
