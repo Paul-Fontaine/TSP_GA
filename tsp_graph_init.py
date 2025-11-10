@@ -13,7 +13,7 @@ HAUTEUR = 600
 NB_LIEUX = 10
 RAYON_LIEU = 12
 MARGE = 30
-NOM_GROUPE = "GROUPE_XYZ"  # <<< à personnaliser
+NOM_GROUPE = "GROUPE_10"  # <<< à personnaliser
 
 # =========================
 # Classe Lieu
