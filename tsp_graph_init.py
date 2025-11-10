@@ -13,7 +13,7 @@ HAUTEUR = 600
 NB_LIEUX = 10
 RAYON_LIEU = 12
 MARGE = 30
-NOM_GROUPE = "GROUPE_10"  # <<< à personnaliser
+NOM_GROUPE = "GROUPE_10"  
 
 # =========================
 # Classe Lieu
@@ -41,6 +41,27 @@ class Route:
     """Représente un ordre de visite, avec contrainte 0 ... 0 (départ/arrivée)."""
     def __init__(self, ordre):
         self.ordre = list(ordre)
+    
+    def ajouter_lieu(self, lieu_index: int):
+        """Ajoute un lieu avant le retour au point de départ (dernier élément)."""
+        if len(self.ordre) < 2:
+            # Cas d'une route vide ou mal initialisée
+            self.ordre = [0, lieu_index, 0]
+        else:
+            # Insère avant le dernier 0 (retour)
+            self.ordre.insert(-1, lieu_index)
+        
+    def inserer_lieu(self, index, position):
+        """Insère un lieu à une position donnée."""
+        if position < 0 or position > len(self.ordre) - 1:
+            raise ValueError("Position hors limites.")
+        self.ordre.insert(position, index)
+
+    def supprimer_lieu(self, index):
+        """Supprime un lieu (sauf le départ et l’arrivée)."""
+        if index in self.ordre[1:-1]:
+            self.ordre.remove(index)
+        
 
     def __repr__(self):
         return f"Route(ordre={self.ordre})"
@@ -283,7 +304,8 @@ class Affichage:
 # Exécution directe (démo sans route)
 # =========================
 if __name__ == "__main__":
-    g = Graph(nb_lieux=NB_LIEUX, csv_path=None, seed=42)
+    csv_path = "graph_5.csv" #nom du fichier csv à charger
+    g = Graph(nb_lieux=NB_LIEUX, csv_path=csv_path, seed=42)
     ui = Affichage(g, nom_groupe=NOM_GROUPE)
     # Exemple d’injection ultérieure (depuis ta future classe d'algo) :
     #   r = Route([0,3,1,2,4,5,6,7,8,9,0])
