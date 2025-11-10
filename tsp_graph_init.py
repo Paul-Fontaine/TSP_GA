@@ -184,45 +184,81 @@ class Graph:
 # =========================
 # Classe Affichage
 # =========================
+ZONE_TEXTE_H = 35   # hauteur fixe en pixels de la barre du bas
+MARGE_CANVAS = 28   # marge interne autour du nuage de points (en px)
+COULEUR_BG = "#fafafa"
+COULEUR_GRILLE = "#eeeeee"
+
 class Affichage:
     """
-    Affiche uniquement ce qu'on lui fournit :
-      - les lieux du graph
-      - une route courante (optionnelle) via set_route(Route)
-      - une population (optionnelle) via set_population(list[Route])
-    Raccourcis:
-      P : toggle population (si définie)
-      M : toggle matrice des coûts (texte)
-      Échap : quitter
+    Canvas dimensionné à (LARGEUR, HAUTEUR - ZONE_TEXTE_H) + barre de log fixe.
+    - Toolbar en haut (Charger CSV / Aléatoire / Exécuter / Effacer)
+    - Zoom-to-fit : on mappe automatiquement les coordonnées dans le canvas
+      pour que rien ne soit caché par la barre (ni rogné).
+    - set_run_callback(fn): fn(graph) -> Route | (Route, population:list[Route])
     """
     def __init__(self, graph: Graph, nom_groupe=NOM_GROUPE):
+        import tkinter.filedialog as fd  # stdlib (autorisé via tkinter)
+        self.fd = fd
+
         self.graph = graph
         self.root = tk.Tk()
         self.root.title(f"TSP - {nom_groupe}")
 
-        self.canvas = tk.Canvas(self.root, width=LARGEUR, height=HAUTEUR, bg="white", highlightthickness=0)
-        self.canvas.pack()
+        # Hauteur utile du canvas (au-dessus de la barre)
+        self.canvas_h = max(100, HAUTEUR - ZONE_TEXTE_H)
 
-        self.text = tk.Text(self.root, height=10, width=100)
-        self.text.pack(fill="x")
+        # ---------- Toolbar (haut) ----------
+        topbar = tk.Frame(self.root, bg="#f2f2f2")
+        topbar.pack(side="top", fill="x")
+        self.btn_csv = tk.Button(topbar, text="Charger CSV…", command=self._ui_charger_csv)
+        self.btn_csv.pack(side="left", padx=6, pady=6)
+        self.btn_rand = tk.Button(topbar, text="Aléatoire", command=self._ui_regenerer_aleatoire)
+        self.btn_rand.pack(side="left", padx=6, pady=6)
+        self.btn_run = tk.Button(topbar, text="Exécuter", command=self._ui_executer)
+        self.btn_run.pack(side="left", padx=6, pady=6)
+        self.btn_clear = tk.Button(topbar, text="Effacer route", command=self._ui_effacer)
+        self.btn_clear.pack(side="left", padx=6, pady=6)
 
+        self.lbl_info = tk.Label(topbar, text="Prêt.", bg="#f2f2f2")
+        self.lbl_info.pack(side="right", padx=8)
+
+        # ---------- Zone graphique (milieu) ----------
+        self.canvas = tk.Canvas(self.root, width=LARGEUR, height=self.canvas_h,
+                                bg=COULEUR_BG, highlightthickness=0)
+        self.canvas.pack(side="top", fill="both", expand=False)
+
+        # ---------- Zone de texte (bas) en hauteur *pixels* fixée ----------
+        text_frame = tk.Frame(self.root, height=ZONE_TEXTE_H)
+        text_frame.pack(side="bottom", fill="x")
+        text_frame.pack_propagate(False)
+        self.text = tk.Text(text_frame, bd=0)
+        self.text.pack(fill="both", expand=True)
+
+        # états
         self._route = None
         self._population = []
         self._show_population = False
         self._show_matrix = False
+        self._run_callback = None  # à brancher par set_run_callback
 
+        # raccourcis
         self.root.bind("<Escape>", lambda e: self.root.destroy())
         self.root.bind("<Key-p>", self._toggle_population)
         self.root.bind("<Key-P>", self._toggle_population)
         self.root.bind("<Key-m>", self._toggle_matrix)
         self.root.bind("<Key-M>", self._toggle_matrix)
 
+        # transform (zoom-to-fit) recalculée à chaque redraw
+        self._transform = None  # (scale, offset_x, offset_y)
+
         self.redraw()
 
-    # ------- API d'injection depuis tes algos -------
+    # ===== API externe =====
     def set_route(self, route: Route):
         self._route = route
         self._log(f"Route mise à jour : {route.ordre} | distance = {self.graph.calcul_distance_route(route):.2f}")
+        self.lbl_info.config(text=f"Distance: {self.graph.calcul_distance_route(route):.2f}")
         self.redraw()
 
     def set_population(self, routes: list):
@@ -230,7 +266,60 @@ class Affichage:
         self._log(f"Population mise à jour : {len(self._population)} routes")
         self.redraw()
 
-    # ------- UI -------
+    def set_run_callback(self, fn):
+        """fn(graph) -> Route | (Route, population:list[Route])"""
+        self._run_callback = fn
+
+    # ===== UI handlers =====
+    def _ui_charger_csv(self):
+        path = self.fd.askopenfilename(
+            title="Choisir un CSV (nom,x,y ou x,y)",
+            filetypes=[("CSV", "*.csv"), ("Tous", "*.*")]
+        )
+        if not path:
+            return
+        try:
+            g = Graph(csv_path=path)
+            self.graph = g
+            self._route = None
+            self._population = []
+            self.lbl_info.config(text=f"CSV chargé: {path.split('/')[-1]}")
+            self._log(f"Graphe chargé depuis CSV: {path}")
+            self.redraw()
+        except Exception as e:
+            self._log(f"[ERREUR] {e}")
+            self.lbl_info.config(text="Erreur CSV")
+
+    def _ui_regenerer_aleatoire(self):
+        self.graph = Graph(nb_lieux=len(self.graph.liste_lieux))
+        self._route = None
+        self._population = []
+        self.lbl_info.config(text="Graphe aléatoire régénéré")
+        self._log("Graphe aléatoire régénéré.")
+        self.redraw()
+
+    def _ui_executer(self):
+        if not self._run_callback:
+            self._log("Aucun callback d'exécution défini (utilise set_run_callback).")
+            self.lbl_info.config(text="Pas d'algo")
+            return
+        res = self._run_callback(self.graph)
+        if res is None:
+            return
+        if isinstance(res, tuple) and len(res) == 2:
+            route, pop = res
+            self.set_population(pop)
+            self.set_route(route)
+        else:
+            self.set_route(res)
+
+    def _ui_effacer(self):
+        self._route = None
+        self._population = []
+        self.lbl_info.config(text="Route effacée")
+        self.redraw()
+
+    # ===== logging / toggles =====
     def _log(self, msg: str):
         self.text.insert("end", msg + "\n")
         self.text.see("end")
@@ -260,12 +349,60 @@ class Affichage:
             row_vals = " ".join([f"{mat[i, j]:7.1f}" for j in range(n)])
             self._log(f"{i:>3d}  {row_vals}")
 
+    # ===== géométrie & dessin =====
+    def _compute_transform(self):
+        """Calcule (scale, offx, offy) pour zoom-to-fit avec marge."""
+        xs = [lieu.x for lieu in self.graph.liste_lieux] or [0]
+        ys = [lieu.y for lieu in self.graph.liste_lieux] or [0]
+        xmin, xmax = min(xs), max(xs)
+        ymin, ymax = min(ys), max(ys)
+        w = max(1.0, xmax - xmin)
+        h = max(1.0, ymax - ymin)
+
+        W = max(2*MARGE_CANVAS + 2*RAYON_LIEU, self.canvas.winfo_width() or LARGEUR)
+        H = max(2*MARGE_CANVAS + 2*RAYON_LIEU, self.canvas_h)
+
+        # scale uniforme pour garder les proportions
+        scale = min(
+            (W - 2*MARGE_CANVAS - 2*RAYON_LIEU) / w,
+            (H - 2*MARGE_CANVAS - 2*RAYON_LIEU) / h
+        )
+
+        offx = MARGE_CANVAS + RAYON_LIEU - xmin*scale + (W - 2*MARGE_CANVAS - 2*RAYON_LIEU - w*scale)/2
+        offy = MARGE_CANVAS + RAYON_LIEU - ymin*scale + (H - 2*MARGE_CANVAS - 2*RAYON_LIEU - h*scale)/2
+        self._transform = (scale, offx, offy)
+
+    def _map_to_canvas(self, x, y):
+        if self._transform is None:
+            self._compute_transform()
+        s, ox, oy = self._transform
+        X = x*s + ox
+        Y = y*s + oy
+        # garde une petite marge pour les disques
+        X = max(RAYON_LIEU+2, min((self.canvas.winfo_width() or LARGEUR) - RAYON_LIEU-2, X))
+        Y = max(RAYON_LIEU+2, min(self.canvas_h - RAYON_LIEU-2, Y))
+        return X, Y
+
+    def _draw_background(self):
+        # grille légère
+        self.canvas.delete("bg-grid")
+        step = 50
+        W = self.canvas.winfo_width() or LARGEUR
+        H = self.canvas_h
+        for x in range(0, W, step):
+            self.canvas.create_line(x, 0, x, H, fill=COULEUR_GRILLE, tags="bg-grid")
+        for y in range(0, H, step):
+            self.canvas.create_line(0, y, W, y, fill=COULEUR_GRILLE, tags="bg-grid")
+
     def _draw_lieu(self, x, y, label, order_idx=None):
+        x, y = self._map_to_canvas(x, y)
         r = RAYON_LIEU
-        self.canvas.create_oval(x - r, y - r, x + r, y + r, fill="white", outline="black", width=2)
+        fill = "#ff5a5a" if str(label) == "0" else "#f0f0f0"
+        outline = "#222222" if str(label) == "0" else "#555555"
+        self.canvas.create_oval(x - r, y - r, x + r, y + r, fill=fill, outline=outline, width=2)
         self.canvas.create_text(x, y, text=str(label), font=("Arial", 10, "bold"))
         if order_idx is not None:
-            self.canvas.create_text(x, y - r - 10, text=str(order_idx), font=("Arial", 9))
+            self.canvas.create_text(x, y - r - 10, text=str(order_idx), font=("Arial", 9), fill="#333333")
 
     def _draw_route(self, route: Route, dash=(6, 4), color="blue", width=2):
         if not route or not route.ordre or len(route.ordre) < 2:
@@ -273,44 +410,44 @@ class Affichage:
         pts = []
         for idx in route.ordre:
             lieu = self.graph.liste_lieux[idx]
-            pts.append((lieu.x, lieu.y))
+            pts.append(self._map_to_canvas(lieu.x, lieu.y))
         for (x1, y1), (x2, y2) in zip(pts[:-1], pts[1:]):
             self.canvas.create_line(x1, y1, x2, y2, fill=color, dash=dash, width=width)
 
     def redraw(self):
         self.canvas.delete("all")
+        self._compute_transform()
+        self._draw_background()
 
-        # Population en fond (gris clair), si activée
+        # Population en fond
         if self._show_population and self._population:
             for r in self._population:
-                self._draw_route(r, dash=(), color="#CCCCCC", width=1)
+                self._draw_route(r, dash=(), color="#cfcfcf", width=1)
 
-        # Route principale (si fournie)
+        # Route principale
         if self._route:
-            self._draw_route(self._route, dash=(6, 4), color="blue", width=2)
-            # Indices d'ordre au-dessus des lieux selon la route
+            self._draw_route(self._route, dash=(6, 4), color="#1e70ff", width=2)
             ordre_index = {idx: k for k, idx in enumerate(self._route.ordre)}
         else:
             ordre_index = {}
 
         # Lieux
         for i, lieu in enumerate(self.graph.liste_lieux):
-            order_idx = ordre_index.get(i, None)
-            self._draw_lieu(lieu.x, lieu.y, i, order_idx=order_idx)
+            self._draw_lieu(lieu.x, lieu.y, i, order_idx=ordre_index.get(i, None))
 
     def run(self):
+        # recalcule le zoom quand la fenêtre change
+        def _on_resize(_evt):
+            self.redraw()
+        self.canvas.bind("<Configure>", _on_resize)
         self.root.mainloop()
+        
 
 
 # =========================
 # Exécution directe (démo sans route)
 # =========================
 if __name__ == "__main__":
-    csv_path = "graph_5.csv" #nom du fichier csv à charger
-    g = Graph(nb_lieux=NB_LIEUX, csv_path=csv_path, seed=42)
-    ui = Affichage(g, nom_groupe=NOM_GROUPE)
-    # Exemple d’injection ultérieure (depuis ta future classe d'algo) :
-    #   r = Route([0,3,1,2,4,5,6,7,8,9,0])
-    #   ui.set_route(r)
-    #   ui.set_population([r1, r2, ...])
+    g = Graph(csv_path="fichiers_csv_exemples/graph_20.csv",seed=2)   # <-- Chargement du csv
+    ui = Affichage(g, nom_groupe="Groupe_10")  # <-- Affichage
     ui.run()
