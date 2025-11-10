@@ -41,6 +41,7 @@ class Route:
     """Représente un ordre de visite, avec contrainte 0 ... 0 (départ/arrivée)."""
     def __init__(self, ordre):
         self.ordre = list(ordre)
+        self.distance = None  # Calculée ultérieurement via Graph.calcul_distance_route(route)
 
     def __len__(self):
         return len(self.ordre)
@@ -70,8 +71,31 @@ class Route:
         idx_zero = self.ordre.index(0)
         nouvelle_ordre = self.ordre[idx_zero:] + self.ordre[1:idx_zero + 1]
         self.ordre = nouvelle_ordre
-        
+    
+    def __lt__ (self, other: "Route"):
+        """Compare les distances des routes."""
+        return self.distance < other.distance
+    
+    def __gt__ (self, other: "Route"):
+        """Compare les distances des routes."""
+        return self.distance > other.distance
+    
+    def __le__ (self, other: "Route"):
+        """Compare les distances des routes."""
+        return self.distance <= other.distance
 
+    def __ge__ (self, other: "Route"):
+        """Compare les distances des routes."""
+        return self.distance >= other.distance  
+
+    def __eq__ (self, other: "Route"):
+        """si c'est les mêmes sommets mais dans un ordre différent"""
+        return set(self.ordre) == set(other.ordre) and len(self.ordre) == len(other.ordre)
+
+    def __neq__ (self, other: "Route"):
+        """si ce n'est pas les mêmes sommets"""
+        return not self.__eq__(other)
+    
     def __repr__(self):
         return f"Route(ordre={self.ordre})"
 
