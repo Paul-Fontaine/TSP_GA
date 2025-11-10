@@ -13,7 +13,7 @@ HAUTEUR = 600
 NB_LIEUX = 10
 RAYON_LIEU = 12
 MARGE = 30
-NOM_GROUPE = "GROUPE_XYZ"  # <<< à personnaliser
+NOM_GROUPE = "GROUPE_10"  # <<< à personnaliser
 
 # =========================
 # Classe Lieu
@@ -283,10 +283,6 @@ class Affichage:
 # Exécution directe (démo sans route)
 # =========================
 if __name__ == "__main__":
-    g = Graph(nb_lieux=NB_LIEUX, csv_path=None, seed=42)
-    ui = Affichage(g, nom_groupe=NOM_GROUPE)
-    # Exemple d’injection ultérieure (depuis ta future classe d'algo) :
-    #   r = Route([0,3,1,2,4,5,6,7,8,9,0])
-    #   ui.set_route(r)
-    #   ui.set_population([r1, r2, ...])
+    g = Graph(csv_path="graph_5.csv")   # <-- Chargement du csv
+    ui = Affichage(g, nom_groupe="Groupe_10")  # <-- Affichage
     ui.run()
