@@ -82,12 +82,14 @@ class Graph:
             random.seed(seed)
 
         self.liste_lieux = []
+        
         self.matrice_od = None
 
         if csv_path:
             self.charger_graph(csv_path)
         else:
             self._generer_aleatoire(nb_lieux)
+        self.N = len(self.liste_lieux)
 
         self.calcul_matrice_cout_od()
 
