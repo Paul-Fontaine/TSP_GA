@@ -47,25 +47,29 @@ class TSP_GA:
         participants.sort()
         return participants[0]
 
-    def _croisement_OX(self, parent1: Route, parent2: Route) -> Route:
+    def _croisement_OX(self, parent1: Route, parent2: Route) -> list:
         a, b = sorted(random.sample(range(1, self.graph.N-1), 2))
 
-        enfant = [None] * self.graph.N
+        enfant = [None] * (self.graph.N+1)
+        enfant[-1] = 0
         enfant[a:b] = parent1[a:b]  # copie une partie de parent1 dans enfant
         lieux_utilises = set(parent1[a:b])
 
         # place les villes restantes en préservant l'ordre de parent2 en évitant les doublons dans enfant
         i = 0
+        saut = False
         for lieu in parent2:
             if lieu not in lieux_utilises:
-                if i >= a:
+                if i >= a and not saut:
                     i = b
+                    saut = True
                 enfant[i] = lieu
                 lieux_utilises.add(lieu)
                 i += 1
+
         return enfant
 
-    def _mutation(self, enfant: Route) -> Route:
+    def _mutation(self, enfant: list) -> list:
         a, b = random.sample(range(1, self.graph.N - 1), 2)
         enfant[a], enfant[b] = enfant[b], enfant[a]
         return enfant
@@ -84,34 +88,35 @@ class TSP_GA:
             if random.random() < self.prob_mutation:
                 enfant = self._mutation(enfant)
 
+            enfant = Route(enfant)
             enfant.distance = self.graph.calcul_distance_route(enfant)
             population_enfants.append(enfant)
 
-            return population_enfants
+        return population_enfants
 
     def _selection(self, pop_enfants, k_tournoi: int = 3) -> list[Route]:
         population_totale = sorted(self.population + pop_enfants)
         if population_totale[0].distance > self.best_route.distance:
             self.best_route = population_totale[0]
-        nouvelle_population = [None] * self.taille_pop
+        nouvelle_population = []
 
         # Elitisme : garde le top 5%
-        n_5_pourcents = int(self.taille_pop * 0.05)
+        n_5_pourcents = max(1, int(self.taille_pop * 0.05))
         nouvelle_population[:n_5_pourcents] = population_totale[:n_5_pourcents]
-        del nouvelle_population[:n_5_pourcents]
+        del population_totale[:n_5_pourcents]
 
         # Selection par tournoi
-        i = n_5_pourcents
         while len(nouvelle_population) < self.taille_pop:
             participants = random.sample(range(len(population_totale)), k_tournoi)
             gagnant_index = min(participants, key=lambda i: population_totale[i].distance)
-            nouvelle_population[i] = population_totale[gagnant_index]
+            nouvelle_population.append(population_totale[gagnant_index])
             del population_totale[gagnant_index]
 
         self.population = nouvelle_population
 
     def resoudre(self) -> Route:
         for i in range(self.nb_generations):
+            print(self.population)
             pop_enfants = self._reproduction()
             self._selection(pop_enfants)
         return self.best_route
@@ -119,9 +124,16 @@ class TSP_GA:
 
 if __name__ == "__main__":
     # Initialisation du graphe et de l'affichage
-    graph = Graph()
+    graph = Graph(csv_path='fichiers_csv_exemples/graph_20.csv')
     affichage = Affichage(graph)
 
     # Initialisation et exécution de l'algorithme génétique
-    tsp_ga = TSP_GA(graph, affichage)
-    print(f"population initiale: {tsp_ga.population}")
+    tsp_ga = TSP_GA(graph, affichage,
+                    taille_pop=graph.N,
+                    taille_pop_enfants=int(graph.N*0.7),
+                    prob_mutation=0.1,
+                    nb_generations=100)
+
+    meilleure_route = tsp_ga.resoudre()
+    print("Meilleure route:")
+    print(meilleure_route)
