@@ -114,12 +114,29 @@ class TSP_GA:
 
         self.population = nouvelle_population
 
+    def step(self):
+        """
+        Effectue une SEULE génération :
+        - crée les enfants
+        - fait la sélection
+        - met à jour self.population et self.best_route
+        Retourne (best_route, population).
+        """
+        print(self.population)
+
+        pop_enfants = self._reproduction()
+        self._selection(pop_enfants)
+        # self.current_generation += 1
+        return self.population
+    
     def resoudre(self) -> Route:
         for i in range(self.nb_generations):
             print(self.population)
             pop_enfants = self._reproduction()
             self._selection(pop_enfants)
         return self.best_route
+        
+
 
 
 if __name__ == "__main__":
