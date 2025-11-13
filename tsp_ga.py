@@ -1,29 +1,37 @@
 from tsp_graph_init import Graph, Affichage, Route, Lieu
+import random
 
 # Paramètres
 TAILLE_POPULATION = 100
-PROB_MUTATION = 0.2
-PROB_CROISEMENT = 0.8
+PROB_MUTATION = 0.1
 NOMBRE_GENERATIONS = 500
 
 
 class TSP_GA:
-    def __init__(self, graph: Graph, affichage: Affichage):
+    def __init__(self, graph: Graph, affichage: Affichage,
+                 taille_pop=TAILLE_POPULATION, taille_pop_enfants=int(TAILLE_POPULATION*0.7),
+                 prob_mutation=PROB_MUTATION, nb_generations=NOMBRE_GENERATIONS
+                 ):
         self.graph: Graph = graph
         self.affichage: Affichage = affichage
-        self.population: list[Route] = self._creer_pop_initiale(10)
+        self.taille_pop = taille_pop
+        self.taille_pop_enfants = taille_pop_enfants
+        self.prob_mutation = prob_mutation
+        self.nb_generations = nb_generations
+
+        self.population: list[Route] = self._creer_pop_initiale(taille_pop)
         self.population.sort()
         self.best_route: Route = self.population[0]
 
     def _creer_pop_initiale(self, taille_pop: int) -> list[Route]:
         population = []
         for i in range(taille_pop):
-            route = self.route_plus_proche_voisin(depart=i % self.graph.N)
+            route = self._route_plus_proche_voisin(depart=i % self.graph.N)
             route.distance = self.graph.calcul_distance_route(route)
             population.append(route)
         return population
 
-    def route_plus_proche_voisin(self, depart: int) -> Route:
+    def _route_plus_proche_voisin(self, depart: int) -> Route:
         route = Route([depart])
 
         while len(route) < self.graph.N:
@@ -33,6 +41,80 @@ class TSP_GA:
         route.ajouter_lieu(depart)  # Retour au point de départ
         route.reordonner()
         return route
+
+    def _tournoi(self, k: int = 3) -> Route:
+        participants = random.sample(self.population, k)
+        participants.sort()
+        return participants[0]
+
+    def _croisement_OX(self, parent1: Route, parent2: Route) -> Route:
+        a, b = sorted(random.sample(range(1, self.graph.N-1), 2))
+
+        enfant = [None] * self.graph.N
+        enfant[a:b] = parent1[a:b]  # copie une partie de parent1 dans enfant
+        lieux_utilises = set(parent1[a:b])
+
+        # place les villes restantes en préservant l'ordre de parent2 en évitant les doublons dans enfant
+        i = 0
+        for lieu in parent2:
+            if lieu not in lieux_utilises:
+                if i >= a:
+                    i = b
+                enfant[i] = lieu
+                lieux_utilises.add(lieu)
+                i += 1
+        return enfant
+
+    def _mutation(self, enfant: Route) -> Route:
+        a, b = random.sample(range(1, self.graph.N - 1), 2)
+        enfant[a], enfant[b] = enfant[b], enfant[a]
+        return enfant
+
+    def _reproduction(self, k_tournoi: int = 3) -> list[Route]:
+        population_enfants = []
+
+        while len(population_enfants) < self.taille_pop_enfants:
+            parent1 = self._tournoi(k_tournoi)
+            parent2 = self._tournoi(k_tournoi)
+            while parent2 == parent1:
+                parent2 = self._tournoi(k_tournoi)
+
+            enfant = self._croisement_OX(parent1, parent2)
+
+            if random.random() < self.prob_mutation:
+                enfant = self._mutation(enfant)
+
+            enfant.distance = self.graph.calcul_distance_route(enfant)
+            population_enfants.append(enfant)
+
+            return population_enfants
+
+    def _selection(self, pop_enfants, k_tournoi: int = 3) -> list[Route]:
+        population_totale = sorted(self.population + pop_enfants)
+        if population_totale[0].distance > self.best_route.distance:
+            self.best_route = population_totale[0]
+        nouvelle_population = [None] * self.taille_pop
+
+        # Elitisme : garde le top 5%
+        n_5_pourcents = int(self.taille_pop * 0.05)
+        nouvelle_population[:n_5_pourcents] = population_totale[:n_5_pourcents]
+        del nouvelle_population[:n_5_pourcents]
+
+        # Selection par tournoi
+        i = n_5_pourcents
+        while len(nouvelle_population) < self.taille_pop:
+            participants = random.sample(range(len(population_totale)), k_tournoi)
+            gagnant_index = min(participants, key=lambda i: population_totale[i].distance)
+            nouvelle_population[i] = population_totale[gagnant_index]
+            del population_totale[gagnant_index]
+
+        self.population = nouvelle_population
+
+    def resoudre(self) -> Route:
+        for i in range(self.nb_generations):
+            pop_enfants = self._reproduction()
+            self._selection(pop_enfants)
+        return self.best_route
 
 
 if __name__ == "__main__":
