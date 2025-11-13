@@ -80,8 +80,10 @@ class TSP_GA:
         while len(population_enfants) < self.taille_pop_enfants:
             parent1 = self._tournoi(k_tournoi)
             parent2 = self._tournoi(k_tournoi)
-            while parent2 == parent1:
+            essais = 0
+            while parent2 == parent1 and essais < 10:
                 parent2 = self._tournoi(k_tournoi)
+                essais += 1
 
             enfant = self._croisement_OX(parent1, parent2)
 
