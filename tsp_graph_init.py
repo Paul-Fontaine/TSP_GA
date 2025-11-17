@@ -221,18 +221,19 @@ class Graph:
 # Classe Affichage (auto-update sur amélioration)
 # =========================
 # =========================
-# Classe Affichage (auto-update sur amélioration)
+# Classe Affichage (auto-update sur amélioration + CLI friendly)
 # =========================
 class Affichage:
     """
     Affichage pour TSP_GA :
-    - Dessine les lieux (0 en rouge) + grille si N <= 1000
-    - Au-delà de 1000 lieux, n'affiche plus les points (uniquement les tracés)
+    - Dessine les lieux (0 en rouge) + grille si N <= 500
+    - Au-delà de 500 lieux, n'affiche plus les points (uniquement les tracés)
     - Affiche la meilleure route en bleu (pointillé)
     - Affiche jusqu'à 5 routes secondaires en gris **UNIQUEMENT** si P est activé
     - Lance l'algorithme en continu et NE REDESSINE que lorsqu'une meilleure distance est trouvée
     - Barre du bas :
         - à gauche : itération courante / nb générations + distance
+                     + "meilleure trouvée à l’itération k"
         - à droite : "Appuyer sur P pour afficher top N"
     """
 
@@ -246,6 +247,7 @@ class Affichage:
 
         self._show_population = False  # routes secondaires visibles ou non
         self._current_gen = 0          # itération courante
+        self._best_gen = 0             # itération où la meilleure route actuelle a été trouvée
 
         # ----- Fenêtre -----
         self.root = tk.Tk()
@@ -291,7 +293,7 @@ class Affichage:
         self._transform = None
         self._compute_transform()
 
-        # Premier dessin (fond + éventuels points)
+        # Premier dessin (fond uniquement, points seront redessinés avec les routes)
         self.redraw_base()
 
         # flag d'exécution auto
@@ -305,6 +307,7 @@ class Affichage:
 
         # reset compteur d'itérations
         self._current_gen = 0
+        self._best_gen = 0
 
         # récupère population & best initiaux
         self.population = sorted(list(tsp_ga.population))
@@ -315,7 +318,8 @@ class Affichage:
 
         # affiche l'état initial
         self.redraw_base()
-        self._draw_routes()
+        self._draw_routes()          # d'abord les traits
+        self._draw_points_if_needed()  # puis les points par-dessus
         self._update_status(gen=self._current_gen, nb_gen=tsp_ga.nb_generations)
 
         if start_auto:
@@ -356,11 +360,14 @@ class Affichage:
         if improved:
             self.best_route = current_best
             self.best_distance_affichee = current_best_dist
+            self._best_gen = self._current_gen  # nouvelle meilleure trouvée à cette itération
+
             # Redessine uniquement si on a mieux
             self.redraw_base()
             self._draw_routes()
+            self._draw_points_if_needed()
 
-        # Met à jour le texte de la barre (itération + distance) à chaque step
+        # Met à jour la barre (itération + distance + best_gen) à chaque step
         self._update_status(gen=self._current_gen, nb_gen=self.tsp_ga.nb_generations)
 
         # Replanifie la prochaine itération
@@ -372,6 +379,7 @@ class Affichage:
         # on redessine simplement en prenant en compte le nouveau flag
         self.redraw_base()
         self._draw_routes()
+        self._draw_points_if_needed()
 
     # --------------- Géométrie & mapping ---------------
     def _compute_transform(self):
@@ -403,14 +411,12 @@ class Affichage:
     # --------------- Dessin ---------------
     def redraw_base(self):
         """
-        Efface et redessine le fond.
-        Si le nombre de lieux > 1000 : on ne dessine **pas** les points (uniquement les tracés plus tard).
-        Sinon : on dessine la grille + les points.
+        Efface et redessine le fond (grille).
+        Les points sont dessinés ensuite par _draw_points_if_needed()
+        pour être AU-DESSUS des traits.
         """
         self.canvas.delete("all")
         self._draw_background()
-        if len(self.graph.liste_lieux) <= 500:
-            self._draw_points()
 
     def _draw_background(self):
         W = LARGEUR
@@ -421,10 +427,15 @@ class Affichage:
         for y in range(0, H, step):
             self.canvas.create_line(0, y, W, y, fill="#f0f0f0")
 
+    def _draw_points_if_needed(self):
+        """
+        Dessine les lieux uniquement si on a <= 500 points.
+        Appelée APRÈS _draw_routes pour que les points soient au-dessus des traits.
+        """
+        if len(self.graph.liste_lieux) <= 500:
+            self._draw_points()
+
     def _draw_points(self):
-        """
-        Dessine les lieux uniquement si on a <= 1000 points (filtré par redraw_base).
-        """
         r = RAYON_LIEU
         ordre_index = {}
         if self.best_route is not None:
@@ -455,6 +466,11 @@ class Affichage:
             self.canvas.create_line(x1, y1, x2, y2, fill=color, width=width, dash=dash)
 
     def _draw_routes(self):
+        """
+        Dessine les routes (traits) UNIQUEMENT.
+        Les points seront dessinés ensuite par _draw_points_if_needed()
+        pour rester au-dessus des traits.
+        """
         if not self.population:
             return
         pop_sorted = self.population
@@ -475,7 +491,10 @@ class Affichage:
             self.lbl_status_left.config(text="Itération : 0 / 0   |   Distance : -")
             return
 
-        txt = f"Itération : {gen} / {nb_gen}   |   Distance : {self.best_route.distance:.3f}"
+        txt = (
+            f"Itération : {gen} / {nb_gen}   |   Distance : {self.best_route.distance:.3f} "
+            f"(meilleure trouvée à l’itération {self._best_gen})"
+        )
         self.lbl_status_left.config(text=txt)
 
     # --------------- Boucle Tk ---------------
@@ -483,24 +502,68 @@ class Affichage:
         self.root.mainloop()
 
 
-
 # =========================
-# Exécution directe
+# Exécution directe avec arguments CLI
 # =========================
 if __name__ == "__main__":
-    from tsp_ga import TSP_GA  # adapte le nom du fichier si besoin
+    import sys
+    from tsp_ga import TSP_GA  # doit déjà importer Graph, Route, Lieu depuis ce fichier
 
-    graph = Graph(501)  # ou csv_path="fichiers_csv_exemples/graph_20.csv"
-    affichage = Affichage(graph, titre="UI")
+    # Defaults
+    csv_path = None
+    nb_lieux = NB_LIEUX
+    taille_pop = None
+    nb_generations = 500
+    prob_mutation = 0.1
 
+    args = sys.argv[1:]
+    i = 0
+    while i < len(args):
+        arg = args[i]
+        if arg == "--csv" and i + 1 < len(args):
+            csv_path = args[i + 1]
+            i += 2
+        elif arg == "--n" and i + 1 < len(args):
+            nb_lieux = int(args[i + 1])
+            i += 2
+        elif arg == "--pop" and i + 1 < len(args):
+            taille_pop = int(args[i + 1])
+            i += 2
+        elif arg == "--gens" and i + 1 < len(args):
+            nb_generations = int(args[i + 1])
+            i += 2
+        elif arg == "--pm" and i + 1 < len(args):
+            prob_mutation = float(args[i + 1])
+            i += 2
+        else:
+            print(f"Argument inconnu ou incomplet ignoré : {arg}")
+            i += 1
+
+    # Construction du graph
+    if csv_path is not None:
+        graph = Graph(csv_path=csv_path)
+    else:
+        graph = Graph(nb_lieux=nb_lieux)
+
+    # Taille de population par défaut = N
+    if taille_pop is None:
+        taille_pop = graph.N
+    taille_pop_enfants = int(taille_pop * 0.7)
+
+    # UI
+    titre = f"TSP - {NOM_GROUPE}"
+    affichage = Affichage(graph, titre=titre)
+
+    # Algo génétique
     tsp_ga = TSP_GA(
         graph=graph,
         affichage=affichage,
-        taille_pop=graph.N,
-        taille_pop_enfants=int(graph.N * 0.7),
-        prob_mutation=0.2,
-        nb_generations=1000,
+        taille_pop=taille_pop,
+        taille_pop_enfants=taille_pop_enfants,
+        prob_mutation=prob_mutation,
+        nb_generations=nb_generations,
     )
 
+    # Lancer
     affichage.set_ga(tsp_ga)
     affichage.run()
