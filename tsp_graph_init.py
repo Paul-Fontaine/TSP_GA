@@ -10,7 +10,7 @@ import tkinter as tk
 # =========================
 LARGEUR = 800
 HAUTEUR = 600
-NB_LIEUX = 100
+NB_LIEUX = 50
 RAYON_LIEU = 12
 MARGE = 10
 NOM_GROUPE = "GROUPE_10"  
@@ -216,6 +216,7 @@ class Graph:
         return float(total)
 
 
+
 # =========================
 # Classe Affichage (auto-update sur amélioration)
 # =========================
@@ -230,6 +231,9 @@ class Affichage:
     - Affiche la meilleure route en bleu (pointillé)
     - Affiche jusqu'à 5 routes secondaires en gris **UNIQUEMENT** si P est activé
     - Lance l'algorithme en continu et NE REDESSINE que lorsqu'une meilleure distance est trouvée
+    - Barre du bas :
+        - à gauche : itération courante / nb générations + distance
+        - à droite : "Appuyer sur P pour afficher top N"
     """
 
     def __init__(self, graph: Graph, titre="TSP - Algorithme génétique (auto)"):
@@ -241,6 +245,7 @@ class Affichage:
         self.population: list[Route] = []
 
         self._show_population = False  # routes secondaires visibles ou non
+        self._current_gen = 0          # itération courante
 
         # ----- Fenêtre -----
         self.root = tk.Tk()
@@ -259,12 +264,23 @@ class Affichage:
         status_frame.pack(side="bottom", fill="x")
         status_frame.pack_propagate(False)
 
-        self.lbl_status = tk.Label(
+        # label gauche : itération + distance
+        self.lbl_status_left = tk.Label(
             status_frame,
-            text="Prêt. (touche P : afficher/masquer routes secondaires)",
-            bg="#e6e6e6"
+            text="Itération : 0 / 0   |   Distance : -",
+            bg="#e6e6e6",
+            anchor="w"
         )
-        self.lbl_status.pack(side="left", padx=10)
+        self.lbl_status_left.pack(side="left", padx=10, fill="x", expand=True)
+
+        # label droite : aide P
+        self.lbl_status_right = tk.Label(
+            status_frame,
+            text="Appuyer sur P pour afficher top N",
+            bg="#e6e6e6",
+            anchor="e"
+        )
+        self.lbl_status_right.pack(side="right", padx=10)
 
         # Raccourcis utiles
         self.root.bind("<Escape>", lambda e: self.root.destroy())
@@ -287,6 +303,9 @@ class Affichage:
         """Attache le GA et (optionnel) lance la boucle auto."""
         self.tsp_ga = tsp_ga
 
+        # reset compteur d'itérations
+        self._current_gen = 0
+
         # récupère population & best initiaux
         self.population = sorted(list(tsp_ga.population))
         self.best_route = self.population[0] if self.population else None
@@ -297,7 +316,7 @@ class Affichage:
         # affiche l'état initial
         self.redraw_base()
         self._draw_routes()
-        self._update_status(gen=0, nb_gen=tsp_ga.nb_generations)
+        self._update_status(gen=self._current_gen, nb_gen=tsp_ga.nb_generations)
 
         if start_auto:
             self.start_auto()
@@ -317,8 +336,14 @@ class Affichage:
         if not self._auto_running or self.tsp_ga is None:
             return
 
+        # stop si on a déjà atteint le nb maximal de générations
+        if self._current_gen >= self.tsp_ga.nb_generations:
+            return
+
         # Une génération
         self.tsp_ga.step()  # met self.population à jour en interne
+        self._current_gen += 1
+
         self.population = sorted(list(self.tsp_ga.population))
         current_best = self.population[0] if self.population else None
         current_best_dist = current_best.distance if current_best else None
@@ -334,7 +359,9 @@ class Affichage:
             # Redessine uniquement si on a mieux
             self.redraw_base()
             self._draw_routes()
-            self._update_status(gen=None, nb_gen=self.tsp_ga.nb_generations)
+
+        # Met à jour le texte de la barre (itération + distance) à chaque step
+        self._update_status(gen=self._current_gen, nb_gen=self.tsp_ga.nb_generations)
 
         # Replanifie la prochaine itération
         self.root.after(self._delay_ms, self._auto_loop)
@@ -444,18 +471,17 @@ class Affichage:
 
     # --------------- Status ---------------
     def _update_status(self, gen: int | None, nb_gen: int | None):
-        if self.best_route is None or self.best_route.distance is None:
-            self.lbl_status.config(text="Distance : -")
+        if self.best_route is None or self.best_route.distance is None or gen is None or nb_gen is None:
+            self.lbl_status_left.config(text="Itération : 0 / 0   |   Distance : -")
             return
-        if gen is None or nb_gen is None:
-            self.lbl_status.config(text=f"Distance : {self.best_route.distance:.3f}")
-        else:
-            pct = min(100, int(100 * gen / max(1, nb_gen)))
-            self.lbl_status.config(text=f"[{pct}%] distance : {self.best_route.distance:.3f}")
+
+        txt = f"Itération : {gen} / {nb_gen}   |   Distance : {self.best_route.distance:.3f}"
+        self.lbl_status_left.config(text=txt)
 
     # --------------- Boucle Tk ---------------
     def run(self):
         self.root.mainloop()
+
 
 
 # =========================
@@ -464,7 +490,7 @@ class Affichage:
 if __name__ == "__main__":
     from tsp_ga import TSP_GA  # adapte le nom du fichier si besoin
 
-    graph = Graph(50)  # ou csv_path="fichiers_csv_exemples/graph_20.csv"
+    graph = Graph(500)  # ou csv_path="fichiers_csv_exemples/graph_20.csv"
     affichage = Affichage(graph, titre="UI")
 
     tsp_ga = TSP_GA(
