@@ -1,5 +1,6 @@
 from tsp_graph_init import Graph, Affichage, Route, Lieu
 import random
+import numpy as np
 
 # Paramètres
 TAILLE_POPULATION = 100
@@ -25,11 +26,21 @@ class TSP_GA:
 
     def _creer_pop_initiale(self, taille_pop: int) -> list[Route]:
         population = []
-        for i in range(taille_pop):
+        for i in range(0, taille_pop, 2):
             route = self._route_plus_proche_voisin(depart=i % self.graph.N)
             route.distance = self.graph.calcul_distance_route(route)
             population.append(route)
-        return population
+
+        population_unique = list(set(population))
+        nb_routes_manquantes = taille_pop - len(population_unique)
+        print("nombre de doublons : ", nb_routes_manquantes - taille_pop/2)
+        l = len(population)
+        for j in range(nb_routes_manquantes):
+            route = Route(self._mutation(population[j % l].ordre))
+            route.distance = self.graph.calcul_distance_route(route)
+            population_unique.append(route)
+
+        return population_unique
 
     def _route_plus_proche_voisin(self, depart: int) -> Route:
         route = Route([depart])
@@ -70,11 +81,16 @@ class TSP_GA:
         return enfant
 
     def _mutation(self, enfant: list) -> list:
-        a, b = random.sample(range(1, self.graph.N - 1), 2)
-        enfant[a], enfant[b] = enfant[b], enfant[a]
+        if random.random() < 0.5:
+            a, b = random.sample(range(1, self.graph.N - 1), 2)
+            enfant[a], enfant[b] = enfant[b], enfant[a]
+        else:
+            a, b, c, d = random.sample(range(1, self.graph.N - 1), 4)
+            enfant[a], enfant[b] = enfant[b], enfant[a]
+            enfant[c], enfant[d] = enfant[d], enfant[c]
         return enfant
 
-    def _reproduction(self, k_tournoi: int = 3) -> list[Route]:
+    def _reproduction(self, k_tournoi: int = 2) -> list[Route]:
         population_enfants = []
 
         while len(population_enfants) < self.taille_pop_enfants:
@@ -94,11 +110,21 @@ class TSP_GA:
             enfant.distance = self.graph.calcul_distance_route(enfant)
             population_enfants.append(enfant)
 
-        return population_enfants
+        population_enfants_unique = list(set(population_enfants))
+        nb_doublons = self.taille_pop_enfants - len(population_enfants_unique)
 
-    def _selection(self, pop_enfants, k_tournoi: int = 3) -> list[Route]:
+        for j in range(nb_doublons):
+            ordre = [0] + random.sample(range(1, self.graph.N), self.graph.N-1) + [0]
+            route = Route(ordre)
+            route.distance = self.graph.calcul_distance_route(route)
+            population_enfants_unique.append(route)
+
+        print("nombre de doublons : ", self.taille_pop_enfants - len(list(set(population_enfants_unique))))
+        return population_enfants_unique
+
+    def _selection(self, pop_enfants, k_tournoi: int = 3):
         population_totale = sorted(self.population + pop_enfants)
-        if population_totale[0].distance > self.best_route.distance:
+        if population_totale[0].distance < self.best_route.distance:
             self.best_route = population_totale[0]
         nouvelle_population = []
 
@@ -150,7 +176,7 @@ if __name__ == "__main__":
     tsp_ga = TSP_GA(graph, affichage,
                     taille_pop=graph.N,
                     taille_pop_enfants=int(graph.N*0.7),
-                    prob_mutation=0.1,
+                    prob_mutation=0.25,
                     nb_generations=100)
 
     meilleure_route = tsp_ga.resoudre()
