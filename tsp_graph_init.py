@@ -10,9 +10,9 @@ import tkinter as tk
 # =========================
 LARGEUR = 800
 HAUTEUR = 600
-NB_LIEUX = 10
+NB_LIEUX = 100
 RAYON_LIEU = 12
-MARGE = 30
+MARGE = 0
 NOM_GROUPE = "GROUPE_10"  
 
 # =========================
@@ -118,7 +118,6 @@ class Graph:
             random.seed(seed)
 
         self.liste_lieux = []
-        
         self.matrice_od = None
 
         if csv_path:
@@ -126,7 +125,7 @@ class Graph:
         else:
             self._generer_aleatoire(nb_lieux)
         self.N = len(self.liste_lieux)
-
+        
         self.calcul_matrice_cout_od()
 
     def _generer_aleatoire(self, nb_lieux):
@@ -218,122 +217,130 @@ class Graph:
 
 
 # =========================
-# Classe Affichage (style prof + step-by-step)
+# Classe Affichage (auto-update sur amélioration)
 # =========================
 class Affichage:
     """
-    Affichage du TSP pour l'algorithme génétique.
-    - Dessine les lieux (ville 0 en rouge)
-    - Meilleure route en bleu pointillé
-    - Les 5 routes suivantes en gris pointillé
-    - Barre d'état en bas avec pourcentage et distance
-    - Bouton 'Génération suivante' pour avancer étape par étape
+    Affichage pour TSP_GA :
+    - Dessine les lieux (0 en rouge) + grille
+    - Affiche la meilleure route en bleu (pointillé)
+    - Affiche jusqu'à 5 routes secondaires en gris **UNIQUEMENT** si P est activé
+    - Lance l'algorithme en continu et NE REDESSINE que lorsqu'une meilleure distance est trouvée
     """
 
-    def __init__(self, graph: Graph, titre="TSP - Algorithme génétique"):
+    def __init__(self, graph: Graph, titre="TSP - Algorithme génétique (auto)"):
         self.graph = graph
-        self.tsp_ga = None          # sera fourni par set_ga(...)
-        self.generation = 0
-        self.nb_generations = 1     # sera mis à jour quand on a le GA
+        self.tsp_ga = None
 
-        self.best_route: Route | None = None
-        self.population: list[Route] = []   # population courante
+        self.best_route: Route | None = None       # meilleure route affichée
+        self.best_distance_affichee: float | None = None
+        self.population: list[Route] = []
+
+        self._show_population = False  # <<< routes secondaires visibles ou non
 
         # ----- Fenêtre -----
         self.root = tk.Tk()
         self.root.title(titre)
 
-        # ----- Barre du haut (bouton) -----
-        topbar = tk.Frame(self.root, bg="#f2f2f2")
-        topbar.pack(side="top", fill="x")
-
-        self.btn_next = tk.Button(
-            topbar,
-            text="Génération suivante",
-            command=self._next_generation
-        )
-        self.btn_next.pack(side="left", padx=8, pady=5)
-
-        # raccourci clavier : touche "n"
-        self.root.bind("<Key-n>", lambda e: self._next_generation())
-        # quitter avec Echap
-        self.root.bind("<Escape>", lambda e: self.root.destroy())
-
         # ----- Canvas -----
-        self.canvas_h = HAUTEUR - 20
+        self.canvas_h = HAUTEUR - 24
         self.canvas = tk.Canvas(
-            self.root,
-            width=LARGEUR,
-            height=self.canvas_h,
-            bg="white",
-            highlightthickness=0
+            self.root, width=LARGEUR, height=self.canvas_h,
+            bg="white", highlightthickness=0
         )
         self.canvas.pack(side="top", fill="both", expand=True)
 
         # ----- Barre d'état en bas -----
-        status_frame = tk.Frame(self.root, height=20, bg="#e6e6e6")
+        status_frame = tk.Frame(self.root, height=24, bg="#e6e6e6")
         status_frame.pack(side="bottom", fill="x")
         status_frame.pack_propagate(False)
 
         self.lbl_status = tk.Label(
-            status_frame,
-            text="[0%] distance : -  trouvée en 0/0 générations",
-            bg="#e6e6e6"
+            status_frame, text="Prêt. (touche P : afficher/masquer routes secondaires)", bg="#e6e6e6"
         )
         self.lbl_status.pack(side="left", padx=10)
+
+        # Raccourcis utiles
+        self.root.bind("<Escape>", lambda e: self.root.destroy())
+        self.root.bind("<Key-p>", self._toggle_population)   # <<< toggle avec 'p'
+        self.root.bind("<Key-P>", self._toggle_population)   # <<< majuscule aussi
 
         # Transform pour adapter les coordonnées au canvas
         self._transform = None
         self._compute_transform()
 
-        # Premier dessin : fond + points
+        # Premier dessin (fond + points)
         self.redraw_base()
 
-    # ----------------- Connexion avec le GA -----------------
-    def set_ga(self, tsp_ga: "TSP_GA"):
-        """Connecte l'algorithme génétique à l'affichage."""
-        self.tsp_ga = tsp_ga
-        self.nb_generations = tsp_ga.nb_generations
-        self.generation = 0
+        # flag d'exécution auto
+        self._auto_running = False
+        self._delay_ms = 2  # délai entre itérations (ms)
 
-        # récupération de la population initiale
+    # --------------- Connexion avec le GA ---------------
+    def set_ga(self, tsp_ga: "TSP_GA", start_auto: bool = True):
+        """Attache le GA et (optionnel) lance la boucle auto."""
+        self.tsp_ga = tsp_ga
+
+        # récupère population & best initiaux
         self.population = sorted(list(tsp_ga.population))
         self.best_route = self.population[0] if self.population else None
+        self.best_distance_affichee = (
+            self.best_route.distance if self.best_route and self.best_route.distance is not None else None
+        )
 
-        self._update_status()
-        self._draw_routes()
-
-    # ----------------- Gestion des générations -----------------
-    def _next_generation(self):
-        """Appelé quand on clique sur le bouton ou appuie sur 'n'."""
-        if self.tsp_ga is None:
-            self.lbl_status.config(text="Pas d'algo (utilise set_ga(tsp_ga)).")
-            return
-
-        if self.generation >= self.nb_generations:
-            # déjà au bout
-            if self.best_route is not None:
-                self.lbl_status.config(
-                    text=f"[100%] distance : {self.best_route.distance:.3f}  "
-                         f"trouvée en {self.generation}/{self.nb_generations} générations"
-                )
-            return
-
-        # une génération de plus dans le GA
-        # on se fiche du retour éventuel, on lit directement la population du GA
-        self.tsp_ga.step()
-        self.generation += 1
-
-        # met à jour population + best_route
-        self.population = sorted(list(self.tsp_ga.population))
-        self.best_route = self.population[0] if self.population else None
-
-        # redraw complet
+        # affiche l'état initial
         self.redraw_base()
         self._draw_routes()
-        self._update_status()
+        self._update_status(gen=0, nb_gen=tsp_ga.nb_generations)
 
-    # ----------------- Géométrie & mapping -----------------
+        if start_auto:
+            self.start_auto()
+
+    # --------------- Boucle auto ---------------
+    def start_auto(self):
+        """Démarre la boucle qui appelle step() en continu et ne redessine que si amélioration."""
+        if self.tsp_ga is None or self._auto_running:
+            return
+        self._auto_running = True
+        self._auto_loop()
+
+    def stop_auto(self):
+        self._auto_running = False
+
+    def _auto_loop(self):
+        if not self._auto_running or self.tsp_ga is None:
+            return
+
+        # Une génération
+        self.tsp_ga.step()  # met self.population à jour en interne
+        self.population = sorted(list(self.tsp_ga.population))
+        current_best = self.population[0] if self.population else None
+        current_best_dist = current_best.distance if current_best else None
+
+        improved = (
+            current_best_dist is not None and
+            (self.best_distance_affichee is None or current_best_dist < self.best_distance_affichee)
+        )
+
+        if improved:
+            self.best_route = current_best
+            self.best_distance_affichee = current_best_dist
+            # Redessine uniquement si on a mieux
+            self.redraw_base()
+            self._draw_routes()
+            self._update_status(gen=None, nb_gen=self.tsp_ga.nb_generations)
+
+        # Replanifie la prochaine itération
+        self.root.after(self._delay_ms, self._auto_loop)
+
+    # --------------- Toggle population (touche P) ---------------
+    def _toggle_population(self, _evt=None):
+        self._show_population = not self._show_population
+        # on redessine simplement en prenant en compte le nouveau flag
+        self.redraw_base()
+        self._draw_routes()
+
+    # --------------- Géométrie & mapping ---------------
     def _compute_transform(self):
         xs = [lieu.x for lieu in self.graph.liste_lieux] or [0.0]
         ys = [lieu.y for lieu in self.graph.liste_lieux] or [0.0]
@@ -360,15 +367,13 @@ class Affichage:
         s, ox, oy = self._transform
         return x * s + ox, y * s + oy
 
-    # ----------------- Dessin -----------------
+    # --------------- Dessin ---------------
     def redraw_base(self):
-        """Efface le canvas et redessine la grille + les points."""
         self.canvas.delete("all")
         self._draw_background()
         self._draw_points()
 
     def _draw_background(self):
-        """Grille légère en fond."""
         W = LARGEUR
         H = self.canvas_h
         step = 50
@@ -378,101 +383,73 @@ class Affichage:
             self.canvas.create_line(0, y, W, y, fill="#f0f0f0")
 
     def _draw_points(self):
-        """Dessine les lieux, ville 0 en rouge, les autres en gris."""
         r = RAYON_LIEU
         ordre_index = {}
         if self.best_route is not None:
-            # On prend l'ordre SANS le retour final à 0 pour numérotation
             for k, idx in enumerate(self.best_route.ordre[:-1]):
                 ordre_index[idx] = k
 
         for i, lieu in enumerate(self.graph.liste_lieux):
             X, Y = self._to_canvas(lieu.x, lieu.y)
+            fill = "#d64545" if i == 0 else "#dddddd"
+            outline = "#222222" if i == 0 else "#555555"
 
-            if i == 0:
-                fill = "#d64545"   # rouge
-                outline = "#222222"
-            else:
-                fill = "#dddddd"   # gris clair
-                outline = "#555555"
+            self.canvas.create_oval(X - r, Y - r, X + r, Y + r,
+                                    fill=fill, outline=outline, width=2)
+            self.canvas.create_text(X, Y, text=str(i), font=("Arial", 10, "bold"))
 
-            self.canvas.create_oval(
-                X - r, Y - r, X + r, Y + r,
-                fill=fill, outline=outline, width=2
-            )
-
-            # index de la ville (dans le cercle)
-            self.canvas.create_text(X, Y, text=str(i),
-                                    font=("Arial", 10, "bold"))
-
-            # rang dans la tournée (au-dessus du cercle), si connu
             if i in ordre_index:
-                self.canvas.create_text(
-                    X, Y - r - 8,
-                    text=str(ordre_index[i]),
-                    font=("Arial", 8),
-                    fill="#333333"
-                )
+                self.canvas.create_text(X, Y - r - 8, text=str(ordre_index[i]),
+                                        font=("Arial", 8), fill="#333333")
 
     def _draw_route(self, route: Route, color, dash, width):
         if route is None or not route.ordre or len(route.ordre) < 2:
             return
-
         pts = []
         for idx in route.ordre:
             lieu = self.graph.liste_lieux[idx]
             pts.append(self._to_canvas(lieu.x, lieu.y))
-
         for (x1, y1), (x2, y2) in zip(pts[:-1], pts[1:]):
-            self.canvas.create_line(
-                x1, y1, x2, y2,
-                fill=color,
-                width=width,
-                dash=dash
-            )
+            self.canvas.create_line(x1, y1, x2, y2, fill=color, width=width, dash=dash)
 
     def _draw_routes(self):
-        """
-        Dessine les 6 meilleures routes :
-        - la meilleure en bleu
-        - les 5 suivantes en gris
-        """
         if not self.population:
             return
-
-        pop_sorted = sorted(self.population)
+        pop_sorted = self.population
         best = pop_sorted[0]
-        others = pop_sorted[1:6]   # les 5 suivantes (ou moins si population < 6)
-        print("others:", others)
-        # Les 5 suivantes en gris pointillé
-        for r in others:
-            self._draw_route(r, color="#C91F1F", dash=(2, 4), width=1)
+        others = pop_sorted[1:6]  # jusqu'à 5 suivantes
 
-        # Meilleure actuelle en bleu pointillé
+        # routes secondaires en gris UNIQUEMENT si _show_population = True
+        if self._show_population:
+            for r in others:
+                self._draw_route(r, color="#c0c0c0", dash=(2, 4), width=1)
+
+        # meilleure route toujours affichée
         self._draw_route(best, color="#0066cc", dash=(4, 3), width=2)
 
-    # ----------------- Barre d'état -----------------
-    def _update_status(self):
+    # --------------- Status ---------------
+    def _update_status(self, gen: int | None, nb_gen: int | None):
         if self.best_route is None or self.best_route.distance is None:
-            txt = "[0%] distance : -  trouvée en 0/0 générations"
+            self.lbl_status.config(text="Distance : -")
+            return
+        if gen is None or nb_gen is None:
+            self.lbl_status.config(text=f"Distance : {self.best_route.distance:.3f}")
         else:
-            pct = min(100, int(100 * self.generation / max(1, self.nb_generations)))
-            txt = (
-                f"[{pct}%] distance : {self.best_route.distance:.3f}  "
-                f"trouvée en {self.generation}/{self.nb_generations} générations"
-            )
-        self.lbl_status.config(text=txt)
+            pct = min(100, int(100 * gen / max(1, nb_gen)))
+            self.lbl_status.config(text=f"[{pct}%] distance : {self.best_route.distance:.3f}")
 
-    # ----------------- Boucle principale -----------------
+    # --------------- Boucle Tk ---------------
     def run(self):
         self.root.mainloop()
 
 
+# =========================
+# Exécution directe
+# =========================
 if __name__ == "__main__":
-    from tsp_ga import TSP_GA
-    # graph = Graph(csv_path="fichiers_csv_exemples/graph_20.csv")
-    graph = Graph(50)
+    from tsp_ga import TSP_GA  # adapte le nom du fichier si besoin
 
+    graph = Graph()  # ou csv_path="fichiers_csv_exemples/graph_20.csv"
     affichage = Affichage(graph, titre="UI")
 
     tsp_ga = TSP_GA(
@@ -481,9 +458,8 @@ if __name__ == "__main__":
         taille_pop=graph.N,
         taille_pop_enfants=int(graph.N * 0.7),
         prob_mutation=0.1,
-        nb_generations=100,  
+        nb_generations=100,
     )
 
     affichage.set_ga(tsp_ga)
-    # Fenêtre Tkinter
     affichage.run()
