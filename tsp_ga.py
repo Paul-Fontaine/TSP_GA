@@ -1,7 +1,7 @@
 from tsp_graph_init import Graph, Affichage, Route, Lieu
 import random
 
-# Paramètres
+# valeurs par défaut
 TAILLE_POPULATION = 100
 PROB_MUTATION = 0.1
 NOMBRE_GENERATIONS = 500

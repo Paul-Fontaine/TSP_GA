@@ -464,7 +464,7 @@ class Affichage:
 if __name__ == "__main__":
     from tsp_ga import TSP_GA  # adapte le nom du fichier si besoin
 
-    graph = Graph()  # ou csv_path="fichiers_csv_exemples/graph_20.csv"
+    graph = Graph(50)  # ou csv_path="fichiers_csv_exemples/graph_20.csv"
     affichage = Affichage(graph, titre="UI")
 
     tsp_ga = TSP_GA(
@@ -472,8 +472,8 @@ if __name__ == "__main__":
         affichage=affichage,
         taille_pop=graph.N,
         taille_pop_enfants=int(graph.N * 0.7),
-        prob_mutation=0.1,
-        nb_generations=100,
+        prob_mutation=0.2,
+        nb_generations=300,
     )
 
     affichage.set_ga(tsp_ga)
