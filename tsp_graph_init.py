@@ -95,7 +95,10 @@ class Route:
     def __neq__(self, other: "Route"):
         """si l'ordre des sommets n'est pas le même"""
         return not self.__eq__(other)
-    
+
+    def __hash__(self):
+        return hash((tuple(self.ordre), self.distance))
+
     def __repr__(self):
         return f"d={self.distance:.2f}, ordre={self.ordre})"
 
