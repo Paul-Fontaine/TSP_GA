@@ -182,15 +182,35 @@ class Graph:
         if not self.liste_lieux:
             raise ValueError("CSV vide ou illisible.")
 
+
     def calcul_matrice_cout_od(self):
-        n = len(self.liste_lieux)
-        self.matrice_od = np.zeros((n, n), dtype=float)
+        n = self.N
+        self.matrice_od = np.zeros((n*(n-1)//2,), dtype=np.float32)
+
+        def index(i, j):
+            if i == j:
+                raise ValueError("distance(i,i) non stockée dans la matrice compacte")
+            if j < i:
+                i, j = j, i
+            # index dans le triangle supérieur (i < j)
+            return i*n - i*(i+1)//2 + (j - i - 1)
+
+
+
+        self._tri_index = index
+
         for i in range(n):
-            for j in range(n):
-                if i == j:
-                    self.matrice_od[i, j] = 0.0
-                else:
-                    self.matrice_od[i, j] = self.liste_lieux[i].distance(self.liste_lieux[j])
+            for j in range(i+1, n):
+                d = self.liste_lieux[i].distance(self.liste_lieux[j])
+                self.matrice_od[index(i, j)] = d
+
+    
+    def distance_ij(self, i, j):
+        if i == j:
+            return 0.0
+        return self.matrice_od[self._tri_index(i, j)]
+
+
 
     def plus_proche_voisin(self, i: int, visites: set) -> int:
         """
@@ -203,7 +223,8 @@ class Graph:
         for j in range(n):
             if j == i or j in visites:
                 continue
-            d = self.matrice_od[i, j]
+            d = self.distance_ij(i, j)
+
             if d < best_d:
                 best_d = d
                 best_j = j
@@ -213,7 +234,8 @@ class Graph:
         """Somme des distances le long de route.ordre (euclidienne)."""
         total = 0.0
         for a, b in zip(route.ordre[:-1], route.ordre[1:]):
-            total += self.matrice_od[a, b]
+            total += self.distance_ij(a, b)
+
         return float(total)
 
 
@@ -480,7 +502,7 @@ class Affichage:
 if __name__ == "__main__":
     from tsp_ga import TSP_GA  # adapte le nom du fichier si besoin
     # graph = Graph(csv_path="fichiers_csv_exemples/graph_20.csv")
-    graph = Graph(50)
+    graph = Graph(csv_path="fichiers_csv_exemples/graph_20.csv")
 
     affichage = Affichage(graph, titre="UI")  # si tu veux le même titre que sur la capture
 
