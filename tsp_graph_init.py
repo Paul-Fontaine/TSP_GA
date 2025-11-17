@@ -10,7 +10,7 @@ import tkinter as tk
 # =========================
 LARGEUR = 800
 HAUTEUR = 600
-NB_LIEUX = 50
+NB_LIEUX = 499
 RAYON_LIEU = 12
 MARGE = 10
 NOM_GROUPE = "GROUPE_10"  
@@ -409,7 +409,7 @@ class Affichage:
         """
         self.canvas.delete("all")
         self._draw_background()
-        if len(self.graph.liste_lieux) <= 1000:
+        if len(self.graph.liste_lieux) <= 500:
             self._draw_points()
 
     def _draw_background(self):
@@ -490,7 +490,7 @@ class Affichage:
 if __name__ == "__main__":
     from tsp_ga import TSP_GA  # adapte le nom du fichier si besoin
 
-    graph = Graph(500)  # ou csv_path="fichiers_csv_exemples/graph_20.csv"
+    graph = Graph(501)  # ou csv_path="fichiers_csv_exemples/graph_20.csv"
     affichage = Affichage(graph, titre="UI")
 
     tsp_ga = TSP_GA(
@@ -499,7 +499,7 @@ if __name__ == "__main__":
         taille_pop=graph.N,
         taille_pop_enfants=int(graph.N * 0.7),
         prob_mutation=0.2,
-        nb_generations=300,
+        nb_generations=1000,
     )
 
     affichage.set_ga(tsp_ga)
