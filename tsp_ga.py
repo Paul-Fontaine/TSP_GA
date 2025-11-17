@@ -98,7 +98,7 @@ class TSP_GA:
 
     def _selection(self, pop_enfants, k_tournoi: int = 3) -> list[Route]:
         population_totale = sorted(self.population + pop_enfants)
-        if population_totale[0].distance > self.best_route.distance:
+        if population_totale[0].distance < self.best_route.distance:
             self.best_route = population_totale[0]
         nouvelle_population = []
 
