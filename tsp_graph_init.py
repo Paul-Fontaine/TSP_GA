@@ -184,24 +184,33 @@ class Graph:
 
     def calcul_matrice_cout_od(self):
         n = self.N
-        self.matrice_od = np.zeros((n*(n-1)//2,), dtype=np.float32)
 
+        # Récupération des coordonnées dans des arrays NumPy
+        xs = np.array([lieu.x for lieu in self.liste_lieux], dtype=np.float32)
+        ys = np.array([lieu.y for lieu in self.liste_lieux], dtype=np.float32)
+
+        # Construction vectorisée des indices i<j
+        I, J = np.triu_indices(n, k=1)  # toutes les paires (i,j) avec i<j
+
+        # Distances euclidiennes vectorisées : d = sqrt((x_i - x_j)^2 + (y_i - y_j)^2)
+        dx = xs[I] - xs[J]
+        dy = ys[I] - ys[J]
+        dists = np.sqrt(dx*dx + dy*dy).astype(np.float32)
+
+        # Stockage dans le tableau triangulaire compact (n*(n-1)/2)
+        self.matrice_od = dists  # 1D, compact
+
+        # Fonction index(i,j) => position dans ce tableau
         def index(i, j):
             if i == j:
-                raise ValueError("distance(i,i) non stockée dans la matrice compacte")
+                raise ValueError("distance(i,i) non stockée")
             if j < i:
                 i, j = j, i
-            # index dans le triangle supérieur (i < j)
-            return i*n - i*(i+1)//2 + (j - i - 1)
-
-
+            # Index dans le triangle supérieur (i < j)
+            return i * n - (i*(i+1))//2 + (j - i - 1)
 
         self._tri_index = index
 
-        for i in range(n):
-            for j in range(i+1, n):
-                d = self.liste_lieux[i].distance(self.liste_lieux[j])
-                self.matrice_od[index(i, j)] = d
 
     
     def distance_ij(self, i, j):
@@ -514,7 +523,7 @@ if __name__ == "__main__":
     # graph = Graph(csv_path="fichiers_csv_exemples/graph_20.csv")
     graph = Graph(csv_path="fichiers_csv_exemples/graph_20.csv")
 
-    graph = Graph(500)  # ou csv_path="fichiers_csv_exemples/graph_20.csv"
+    graph = Graph(501)  # ou csv_path="fichiers_csv_exemples/graph_20.csv"
     affichage = Affichage(graph, titre="UI")
 
     tsp_ga = TSP_GA(
