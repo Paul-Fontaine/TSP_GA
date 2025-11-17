@@ -13,13 +13,16 @@ class TSP_GA:
                  prob_mutation=PROB_MUTATION, nb_generations=NOMBRE_GENERATIONS
                  ):
         self.graph: Graph = graph
-        self.affichage: Affichage = affichage
-        self.taille_pop = taille_pop
-        self.taille_pop_enfants = taille_pop_enfants
-        self.prob_mutation = prob_mutation
-        self.nb_generations = nb_generations
+        self.affichage: Affichage | None = affichage
+        self.taille_pop = int(taille_pop)
+        self.taille_pop_enfants = int(taille_pop_enfants or int(self.taille_pop * 0.7))
+        self.prob_mutation = float(prob_mutation)
+        self.nb_generations = int(nb_generations)
 
-        self.population: list[Route] = self._creer_pop_initiale(taille_pop)
+        self.N = graph.N
+
+        # Population initiale
+        self.population: list[Route] = self._creer_pop_initiale(self.taille_pop)
         self.population.sort()
         self.best_route: Route = self.population[0]
 
