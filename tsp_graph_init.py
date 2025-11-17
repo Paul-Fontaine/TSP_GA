@@ -10,7 +10,7 @@ import tkinter as tk
 # =========================
 LARGEUR = 800
 HAUTEUR = 600
-NB_LIEUX = 50
+NB_LIEUX = 499
 RAYON_LIEU = 12
 MARGE = 10
 NOM_GROUPE = "GROUPE_10"  
@@ -440,7 +440,7 @@ class Affichage:
         """
         self.canvas.delete("all")
         self._draw_background()
-        if len(self.graph.liste_lieux) <= 1000:
+        if len(self.graph.liste_lieux) <= 500:
             self._draw_points()
 
     def _draw_background(self):
@@ -532,7 +532,7 @@ if __name__ == "__main__":
         taille_pop=graph.N,
         taille_pop_enfants=int(graph.N * 0.7),
         prob_mutation=0.2,
-        nb_generations=300,
+        nb_generations=1000,
     )
 
     affichage.set_ga(tsp_ga)

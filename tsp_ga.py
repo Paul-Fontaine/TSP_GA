@@ -7,21 +7,6 @@ PROB_MUTATION = 0.1
 NOMBRE_GENERATIONS = 500
 
 
-def nombre_doublons(routes: list[Route]) -> int:
-    """
-    Compte les doublons en comparant l'ordre des sommets de chaque route.
-    """
-    seen = set()
-    dups = 0
-    for r in routes:
-        key = tuple(r.ordre)
-        if key in seen:
-            dups += 1
-        else:
-            seen.add(key)
-    return dups
-
-
 class TSP_GA:
     def __init__(self, graph: Graph, affichage: Affichage | None = None,
                  taille_pop=TAILLE_POPULATION,
@@ -47,15 +32,6 @@ class TSP_GA:
         r = Route(ordre)
         r.distance = self.graph.calcul_distance_route(r)
         return r
-
-    def _add_if_new(self, route: Route, container: list[Route], seen: set) -> bool:
-        """Ajoute route à container si sa signature n'est pas déjà dans seen."""
-        sig = tuple(route.ordre)
-        if sig in seen:
-            return False
-        seen.add(sig)
-        container.append(route)
-        return True
 
     def _creer_pop_initiale(self, taille_pop: int) -> list[Route]:
         """
@@ -88,7 +64,6 @@ class TSP_GA:
             population.append(r)
             seen.add(key)
 
-        print("Doublons dans population init:", nombre_doublons(population))
         return population
 
     def _route_plus_proche_voisin(self, depart: int) -> Route:
@@ -188,10 +163,9 @@ class TSP_GA:
                 continue
             seen.add(key)
 
-            enfant = self._new_route(ordre_enfant)
+            enfant = self._new_route(ordre_enfant.copy())
             enfants.append(enfant)
 
-        print("Doublons enfants:", nombre_doublons(enfants))
         return enfants
 
     def _selection(self, pop_enfants: list[Route], k_tournoi: int = 3) -> None:
@@ -203,7 +177,11 @@ class TSP_GA:
         - remplissage par tournoi
         - évite de reprendre deux fois la même route.
         """
-        population_totale = sorted(self.population + pop_enfants)
+        routes_uniques = {}
+        for r in (self.population + pop_enfants):
+            routes_uniques[tuple(r.ordre)] = r
+
+        population_totale = sorted(routes_uniques.values())
 
         # mise à jour du best global
         if population_totale[0].distance < self.best_route.distance:
@@ -235,7 +213,6 @@ class TSP_GA:
             # on retire le gagnant du reste pour éviter de le resélectionner
             reste.remove(gagnant)
 
-        print("Doublons après sélection:", nombre_doublons(nouvelle_population))
         self.population = nouvelle_population
 
     def step(self):
