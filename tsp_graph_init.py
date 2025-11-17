@@ -468,21 +468,12 @@ class Affichage:
         self.root.mainloop()
 
 
-
-# =========================
-# Exécution directe (démo sans route)
-# =========================
-# if __name__ == "__main__":
-#     # g = Graph(csv_path="fichiers_csv_exemples/graph_20.csv",seed=2)   # <-- Chargement du csv
-#     # ui = Affichage(g, nom_groupe="Groupe_10")  # <-- Affichage
-#     # ui.run()
-
 if __name__ == "__main__":
-    from tsp_ga import TSP_GA  # adapte le nom du fichier si besoin
+    from tsp_ga import TSP_GA
     # graph = Graph(csv_path="fichiers_csv_exemples/graph_20.csv")
     graph = Graph(50)
 
-    affichage = Affichage(graph, titre="UI")  # si tu veux le même titre que sur la capture
+    affichage = Affichage(graph, titre="UI")
 
     tsp_ga = TSP_GA(
         graph=graph,
@@ -493,8 +484,6 @@ if __name__ == "__main__":
         nb_generations=100,  
     )
 
-    # La population initiale est déjà créée dans TSP_GA, et best_route aussi
     affichage.set_ga(tsp_ga)
-
     # Fenêtre Tkinter
     affichage.run()
