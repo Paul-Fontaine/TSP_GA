@@ -8,6 +8,12 @@ PROB_MUTATION = 0.1
 NOMBRE_GENERATIONS = 500
 
 
+def nombre_doublons(liste):
+    l1 = len(liste)
+    l2 = len(list(set(liste)))
+    return l1 - l2
+
+
 class TSP_GA:
     def __init__(self, graph: Graph, affichage: Affichage,
                  taille_pop=TAILLE_POPULATION, taille_pop_enfants=int(TAILLE_POPULATION*0.7),
@@ -33,7 +39,7 @@ class TSP_GA:
 
         population_unique = list(set(population))
         nb_routes_manquantes = taille_pop - len(population_unique)
-        print("nombre de doublons : ", nb_routes_manquantes - taille_pop/2)
+        print("nombre de doublons : ", len(population) - len(population_unique))
         l = len(population)
         for j in range(nb_routes_manquantes):
             route = Route(self._mutation(population[j % l].ordre))
@@ -104,7 +110,10 @@ class TSP_GA:
             enfant = self._croisement_OX(parent1, parent2)
 
             if random.random() < self.prob_mutation:
-                enfant = self._mutation(enfant)
+                if self.graph.calcul_distance_route(Route(enfant)) < self.best_route.distance:
+                    self.best_route = enfant
+                else:
+                    enfant = self._mutation(enfant)
 
             enfant = Route(enfant)
             enfant.distance = self.graph.calcul_distance_route(enfant)
@@ -119,7 +128,7 @@ class TSP_GA:
             route.distance = self.graph.calcul_distance_route(route)
             population_enfants_unique.append(route)
 
-        print("nombre de doublons : ", self.taille_pop_enfants - len(list(set(population_enfants_unique))))
+        print("nombre de doublons enfants: ", nombre_doublons(population_enfants_unique))
         return population_enfants_unique
 
     def _selection(self, pop_enfants, k_tournoi: int = 3):
@@ -140,6 +149,7 @@ class TSP_GA:
             nouvelle_population.append(population_totale[gagnant_index])
             del population_totale[gagnant_index]
 
+        print("nombre de doublons après selection : ", nombre_doublons(nouvelle_population))
         self.population = nouvelle_population
 
     def step(self):
