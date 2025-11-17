@@ -97,10 +97,12 @@ class Route:
         return not self.__eq__(other)
 
     def __hash__(self):
-        return hash((tuple(self.ordre), self.distance))
+        return hash((tuple(self.ordre)))
 
     def __repr__(self):
-        return f"d={self.distance:.2f}, ordre={self.ordre})"
+        if self.distance is not None:
+            return f"d={self.distance:.2f}, ordre={self.ordre})"
+        return f"d=None, ordre={self.ordre})"
 
 
 # =========================
@@ -464,7 +466,7 @@ class Affichage:
 if __name__ == "__main__":
     from tsp_ga import TSP_GA  # adapte le nom du fichier si besoin
 
-    graph = Graph(50)  # ou csv_path="fichiers_csv_exemples/graph_20.csv"
+    graph = Graph(200)  # ou csv_path="fichiers_csv_exemples/graph_20.csv"
     affichage = Affichage(graph, titre="UI")
 
     tsp_ga = TSP_GA(
