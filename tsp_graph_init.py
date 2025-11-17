@@ -12,7 +12,7 @@ LARGEUR = 800
 HAUTEUR = 600
 NB_LIEUX = 100
 RAYON_LIEU = 12
-MARGE = 0
+MARGE = 10
 NOM_GROUPE = "GROUPE_10"  
 
 # =========================
@@ -219,10 +219,14 @@ class Graph:
 # =========================
 # Classe Affichage (auto-update sur amélioration)
 # =========================
+# =========================
+# Classe Affichage (auto-update sur amélioration)
+# =========================
 class Affichage:
     """
     Affichage pour TSP_GA :
-    - Dessine les lieux (0 en rouge) + grille
+    - Dessine les lieux (0 en rouge) + grille si N <= 1000
+    - Au-delà de 1000 lieux, n'affiche plus les points (uniquement les tracés)
     - Affiche la meilleure route en bleu (pointillé)
     - Affiche jusqu'à 5 routes secondaires en gris **UNIQUEMENT** si P est activé
     - Lance l'algorithme en continu et NE REDESSINE que lorsqu'une meilleure distance est trouvée
@@ -236,7 +240,7 @@ class Affichage:
         self.best_distance_affichee: float | None = None
         self.population: list[Route] = []
 
-        self._show_population = False  # <<< routes secondaires visibles ou non
+        self._show_population = False  # routes secondaires visibles ou non
 
         # ----- Fenêtre -----
         self.root = tk.Tk()
@@ -256,20 +260,22 @@ class Affichage:
         status_frame.pack_propagate(False)
 
         self.lbl_status = tk.Label(
-            status_frame, text="Prêt. (touche P : afficher/masquer routes secondaires)", bg="#e6e6e6"
+            status_frame,
+            text="Prêt. (touche P : afficher/masquer routes secondaires)",
+            bg="#e6e6e6"
         )
         self.lbl_status.pack(side="left", padx=10)
 
         # Raccourcis utiles
         self.root.bind("<Escape>", lambda e: self.root.destroy())
-        self.root.bind("<Key-p>", self._toggle_population)   # <<< toggle avec 'p'
-        self.root.bind("<Key-P>", self._toggle_population)   # <<< majuscule aussi
+        self.root.bind("<Key-p>", self._toggle_population)
+        self.root.bind("<Key-P>", self._toggle_population)
 
         # Transform pour adapter les coordonnées au canvas
         self._transform = None
         self._compute_transform()
 
-        # Premier dessin (fond + points)
+        # Premier dessin (fond + éventuels points)
         self.redraw_base()
 
         # flag d'exécution auto
@@ -369,9 +375,15 @@ class Affichage:
 
     # --------------- Dessin ---------------
     def redraw_base(self):
+        """
+        Efface et redessine le fond.
+        Si le nombre de lieux > 1000 : on ne dessine **pas** les points (uniquement les tracés plus tard).
+        Sinon : on dessine la grille + les points.
+        """
         self.canvas.delete("all")
         self._draw_background()
-        self._draw_points()
+        if len(self.graph.liste_lieux) <= 1000:
+            self._draw_points()
 
     def _draw_background(self):
         W = LARGEUR
@@ -383,6 +395,9 @@ class Affichage:
             self.canvas.create_line(0, y, W, y, fill="#f0f0f0")
 
     def _draw_points(self):
+        """
+        Dessine les lieux uniquement si on a <= 1000 points (filtré par redraw_base).
+        """
         r = RAYON_LIEU
         ordre_index = {}
         if self.best_route is not None:

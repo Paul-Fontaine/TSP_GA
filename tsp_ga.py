@@ -1,17 +1,10 @@
 from tsp_graph_init import Graph, Affichage, Route, Lieu
 import random
-import numpy as np
 
 # Paramètres
 TAILLE_POPULATION = 100
 PROB_MUTATION = 0.1
 NOMBRE_GENERATIONS = 500
-
-
-def nombre_doublons(liste):
-    l1 = len(liste)
-    l2 = len(list(set(liste)))
-    return l1 - l2
 
 
 class TSP_GA:
@@ -32,21 +25,11 @@ class TSP_GA:
 
     def _creer_pop_initiale(self, taille_pop: int) -> list[Route]:
         population = []
-        for i in range(0, taille_pop, 2):
+        for i in range(taille_pop):
             route = self._route_plus_proche_voisin(depart=i % self.graph.N)
             route.distance = self.graph.calcul_distance_route(route)
             population.append(route)
-
-        population_unique = list(set(population))
-        nb_routes_manquantes = taille_pop - len(population_unique)
-        print("nombre de doublons : ", len(population) - len(population_unique))
-        l = len(population)
-        for j in range(nb_routes_manquantes):
-            route = Route(self._mutation(population[j % l].ordre))
-            route.distance = self.graph.calcul_distance_route(route)
-            population_unique.append(route)
-
-        return population_unique
+        return population
 
     def _route_plus_proche_voisin(self, depart: int) -> Route:
         route = Route([depart])
@@ -87,16 +70,11 @@ class TSP_GA:
         return enfant
 
     def _mutation(self, enfant: list) -> list:
-        if random.random() < 0.5:
-            a, b = random.sample(range(1, self.graph.N - 1), 2)
-            enfant[a], enfant[b] = enfant[b], enfant[a]
-        else:
-            a, b, c, d = random.sample(range(1, self.graph.N - 1), 4)
-            enfant[a], enfant[b] = enfant[b], enfant[a]
-            enfant[c], enfant[d] = enfant[d], enfant[c]
+        a, b = random.sample(range(1, self.graph.N - 1), 2)
+        enfant[a], enfant[b] = enfant[b], enfant[a]
         return enfant
 
-    def _reproduction(self, k_tournoi: int = 2) -> list[Route]:
+    def _reproduction(self, k_tournoi: int = 3) -> list[Route]:
         population_enfants = []
 
         while len(population_enfants) < self.taille_pop_enfants:
@@ -110,28 +88,15 @@ class TSP_GA:
             enfant = self._croisement_OX(parent1, parent2)
 
             if random.random() < self.prob_mutation:
-                if self.graph.calcul_distance_route(Route(enfant)) < self.best_route.distance:
-                    self.best_route = enfant
-                else:
-                    enfant = self._mutation(enfant)
+                enfant = self._mutation(enfant)
 
             enfant = Route(enfant)
             enfant.distance = self.graph.calcul_distance_route(enfant)
             population_enfants.append(enfant)
 
-        population_enfants_unique = list(set(population_enfants))
-        nb_doublons = self.taille_pop_enfants - len(population_enfants_unique)
+        return population_enfants
 
-        for j in range(nb_doublons):
-            ordre = [0] + random.sample(range(1, self.graph.N), self.graph.N-1) + [0]
-            route = Route(ordre)
-            route.distance = self.graph.calcul_distance_route(route)
-            population_enfants_unique.append(route)
-
-        print("nombre de doublons enfants: ", nombre_doublons(population_enfants_unique))
-        return population_enfants_unique
-
-    def _selection(self, pop_enfants, k_tournoi: int = 3):
+    def _selection(self, pop_enfants, k_tournoi: int = 3) -> list[Route]:
         population_totale = sorted(self.population + pop_enfants)
         if population_totale[0].distance < self.best_route.distance:
             self.best_route = population_totale[0]
@@ -149,7 +114,6 @@ class TSP_GA:
             nouvelle_population.append(population_totale[gagnant_index])
             del population_totale[gagnant_index]
 
-        print("nombre de doublons après selection : ", nombre_doublons(nouvelle_population))
         self.population = nouvelle_population
 
     def step(self):
@@ -186,7 +150,7 @@ if __name__ == "__main__":
     tsp_ga = TSP_GA(graph, affichage,
                     taille_pop=graph.N,
                     taille_pop_enfants=int(graph.N*0.7),
-                    prob_mutation=0.25,
+                    prob_mutation=0.1,
                     nb_generations=100)
 
     meilleure_route = tsp_ga.resoudre()
