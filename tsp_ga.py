@@ -188,10 +188,9 @@ class TSP_GA:
                 continue
             seen.add(key)
 
-            enfant = self._new_route(ordre_enfant)
+            enfant = self._new_route(ordre_enfant.copy())
             enfants.append(enfant)
 
-        print("Doublons enfants:", nombre_doublons(enfants))
         return enfants
 
     def _selection(self, pop_enfants: list[Route], k_tournoi: int = 3) -> None:
@@ -203,7 +202,11 @@ class TSP_GA:
         - remplissage par tournoi
         - évite de reprendre deux fois la même route.
         """
-        population_totale = sorted(self.population + pop_enfants)
+        routes_uniques = {}
+        for r in (self.population + pop_enfants):
+            routes_uniques[tuple(r.ordre)] = r
+
+        population_totale = sorted(routes_uniques.values())
 
         # mise à jour du best global
         if population_totale[0].distance < self.best_route.distance:
@@ -235,7 +238,6 @@ class TSP_GA:
             # on retire le gagnant du reste pour éviter de le resélectionner
             reste.remove(gagnant)
 
-        print("Doublons après sélection:", nombre_doublons(nouvelle_population))
         self.population = nouvelle_population
 
     def step(self):
