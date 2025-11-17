@@ -7,21 +7,6 @@ PROB_MUTATION = 0.1
 NOMBRE_GENERATIONS = 500
 
 
-def nombre_doublons(routes: list[Route]) -> int:
-    """
-    Compte les doublons en comparant l'ordre des sommets de chaque route.
-    """
-    seen = set()
-    dups = 0
-    for r in routes:
-        key = tuple(r.ordre)
-        if key in seen:
-            dups += 1
-        else:
-            seen.add(key)
-    return dups
-
-
 class TSP_GA:
     def __init__(self, graph: Graph, affichage: Affichage | None = None,
                  taille_pop=TAILLE_POPULATION,
@@ -47,15 +32,6 @@ class TSP_GA:
         r = Route(ordre)
         r.distance = self.graph.calcul_distance_route(r)
         return r
-
-    def _add_if_new(self, route: Route, container: list[Route], seen: set) -> bool:
-        """Ajoute route à container si sa signature n'est pas déjà dans seen."""
-        sig = tuple(route.ordre)
-        if sig in seen:
-            return False
-        seen.add(sig)
-        container.append(route)
-        return True
 
     def _creer_pop_initiale(self, taille_pop: int) -> list[Route]:
         """
@@ -88,7 +64,6 @@ class TSP_GA:
             population.append(r)
             seen.add(key)
 
-        print("Doublons dans population init:", nombre_doublons(population))
         return population
 
     def _route_plus_proche_voisin(self, depart: int) -> Route:
