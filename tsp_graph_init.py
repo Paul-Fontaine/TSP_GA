@@ -4,8 +4,6 @@ import csv
 import random
 import numpy as np
 import tkinter as tk
-import time
-
 
 # =========================
 # Constantes
@@ -140,9 +138,9 @@ class Graph:
         self.N = len(self.liste_lieux)
 
         #-------------------------------------------------------
-        # Limite stricte : 1 Go pour la matrice distances
+        # Limite stricte : 7.5 Go pour la matrice distances
         # ------------------------------------------------------
-        max_bytes = int(1 * 1024 * 1024 * 1024)  # 1 Go
+        max_bytes = int(5 * 1024 * 1024 * 1024)  # 7.5 Go
         needed_bytes = ((self.N * (self.N - 1)) // 2) * 4  # float32
 
         if needed_bytes <= max_bytes:
@@ -345,21 +343,6 @@ class Affichage:
         )
         self.lbl_status_left.pack(side="left", padx=10, fill="x", expand=True)
 
-        # --- Boutons Start / Stop ---
-        self.btn_start = tk.Button(
-            status_frame,
-            text="Démarrer",
-            command=self.start_auto
-        )
-        self.btn_start.pack(side="right", padx=5)
-
-        self.btn_stop = tk.Button(
-            status_frame,
-            text="Stop",
-            command=self.stop_auto
-        )
-        self.btn_stop.pack(side="right", padx=5)
-
         # label droite : aide P
         self.lbl_status_right = tk.Label(
             status_frame,
@@ -388,8 +371,8 @@ class Affichage:
         self._delay_ms = 2  # délai entre itérations (ms)
 
     # --------------- Connexion avec le GA ---------------
-    def set_ga(self, tsp_ga: "TSP_GA"):
-        """Attache le GA, initialise l'affichage, mais NE LANCE PAS l'auto-loop."""
+    def set_ga(self, tsp_ga: "TSP_GA", start_auto: bool = True):
+        """Attache le GA et (optionnel) lance la boucle auto."""
         self.tsp_ga = tsp_ga
 
         # reset compteur d'itérations
@@ -409,11 +392,8 @@ class Affichage:
         self._draw_points_if_needed()  # puis les points par-dessus (si mode le permet)
         self._update_status(gen=self._current_gen, nb_gen=tsp_ga.nb_generations)
 
-        # if start_auto and self.graph.N<=5000:
-        #     self.start_auto()
-        # elif start_auto:
-        #     time.sleep(15)
-        #     self.start_auto()
+        if start_auto:
+            self.start_auto()
 
     # --------------- Boucle auto ---------------
     def start_auto(self):
@@ -432,7 +412,6 @@ class Affichage:
 
         # stop si on a déjà atteint le nb maximal de générations
         if self._current_gen >= self.tsp_ga.nb_generations:
-            self._auto_running = False
             return
 
         # Une génération
@@ -589,7 +568,11 @@ class Affichage:
             return
 
         # Limitation du nombre de segments
-        max_segments = min(MAX_SEGMENTS, nb_segments)
+        if self._mode == "ultra":
+            # on peut encore réduire un peu pour être sûr d'être léger
+            max_segments = min(MAX_SEGMENTS, nb_segments)
+        else:
+            max_segments = min(MAX_SEGMENTS, nb_segments)
 
         for k in range(max_segments):
             (x1, y1) = pts[k]
@@ -637,30 +620,18 @@ class Affichage:
     def run(self):
         self.root.mainloop()
 
-# =========================w
+
+# =========================
 # Exécution directe avec arguments CLI
 # =========================
 if __name__ == "__main__":
-    import argparse
     from math import sqrt
     from tsp_ga import TSP_GA
-
-    parser = argparse.ArgumentParser(description="Run TSP GA with optional CSV or number of cities")
-    parser.add_argument("--csv", dest="csv_path", help="Path to CSV file with cities", default=None)
-    parser.add_argument("-n", dest="nb_lieux", type=int, help="Number of cities to generate (ignored if --csv provided)",
-                        default=200)
-    args = parser.parse_args()
-
-    # Build graph from CSV if provided, otherwise generate nb cities
-    if args.csv_path:
-        graph = Graph(csv_path=args.csv_path)
-    else:
-        graph = Graph(nb_lieux=args.nb_lieux)
-
+    graph = Graph(csv_path="fichiers_csv_exemples/graph_5.csv")
+    # graph = Graph(0)
     affichage = Affichage(graph, titre="UI")
 
     taille_pop = max(10, 2 * graph.N) if graph.N < 500 else int(5 * sqrt(graph.N)) + 900
-    print(f"Initialisation GA avec taille_pop={taille_pop} pour N={graph.N}")
     tsp_ga = TSP_GA(
         graph=graph,
         affichage=affichage,

@@ -1,5 +1,4 @@
 import time
-from collections import defaultdict
 from math import sqrt
 from tsp_graph_init import Graph, Affichage, Route, Lieu
 import random
@@ -69,8 +68,9 @@ class TSP_GA:
 
         while ameliore:
             ameliore = False
+            # on utilise len(meilleure) pour refléter la route mise à jour
             for i in range(1, len(meilleure) - 3):
-                for j in range(i + 1, len(route) - 1):
+                for j in range(i + 1, len(meilleure) - 1):
                     candidate = Route(meilleure[:i] + meilleure[i:j][::-1] + meilleure[j:])
                     candidate.distance = self.graph.calcul_distance_route(candidate)
                     if candidate.distance < meilleure.distance:
@@ -119,7 +119,9 @@ class TSP_GA:
            Complexité globale : O(N) (en pratique ~ O(N) car les cellules sont petites).
         """
 
-        nb_cellules = int(sqrt(self.N/15))  # 15 lieux par cellule en moyenne
+        # Nombre de cellules (~15 lieux par cellule) + variation légère
+        base = max(1, int(sqrt(self.N / 15)))
+        nb_cellules = max(1, base + random.randint(-1, 1))
 
         # 1. Récupérer limites du plan
         xs = [l.x for l in self.graph.liste_lieux]
@@ -143,9 +145,8 @@ class TSP_GA:
             grid[cx][cy].append(i)
 
         # 4. Construire la route en parcourant la grille
-        depart = random.choice(grid[0][0])
-        ordre = [depart]
-        lieux_utilises = {depart}
+        ordre = [0]
+        lieux_utilises = {0}
 
         # Ordre des lignes légèrement aléatoire pour varier les routes
         rows = list(range(nb_cellules))
@@ -181,30 +182,25 @@ class TSP_GA:
                     local_points.remove(nxt)
                     last = nxt
 
+        # On boucle au départ
         ordre.append(0)
-        route = self._new_route(ordre)
-        route.reordonner()
-        return route
+        return self._new_route(ordre)
+
 
     def _creer_pop_initiale(self, taille_pop: int) -> list[Route]:
         """Crée la population initiale en combinant les heuristiques plus proche voisin, farthest insertion
            et des routes aléatoires.
            Complexité : O(p*N²) avec p la taille de la population qui n'est pas générée aléatoirement."""
-        if self.N > 10000:
+        if self.N > 500:
             nb_ppv = 0
             nb_fi = 0
-            nb_grille = 10
-            nb_aleatoire = taille_pop - nb_grille
-        elif self.N > 500:
-            nb_ppv = 0
-            nb_fi = 0
-            nb_grille = 20
-            nb_aleatoire = taille_pop - nb_grille
+            nb_grille = 1
+            nb_aleatoire = taille_pop - 1
         elif self.N > 200:
-            nb_ppv = 1
-            nb_fi = 1
+            nb_ppv = 0
+            nb_fi = 0
             nb_grille = int(0.4 * taille_pop)
-            nb_aleatoire = taille_pop - nb_grille - nb_fi
+            nb_aleatoire = taille_pop - nb_grille
         else:
             n_operations_max = 1e6
             pourcentage_aleatoire = 1 - n_operations_max / (taille_pop * self.N * self.N)
@@ -212,9 +208,9 @@ class TSP_GA:
             print(f"  - Pourcentage de routes aléatoires ajusté à {pourcentage_aleatoire*100:.2f}% pour limiter p*N² à {n_operations_max:.0f}.")
 
             nb_aleatoire = int(taille_pop * pourcentage_aleatoire)
-            nb_restant = taille_pop - nb_aleatoire - 1
-            nb_fi = 1
-            nb_grille = int(nb_restant / 2)
+            nb_restant = taille_pop - nb_aleatoire
+            nb_grille = nb_restant // 2
+            nb_fi = nb_restant // 4
             nb_ppv = taille_pop - nb_aleatoire - nb_fi - nb_grille
 
         print(f"  - Création de la population initiale : {nb_ppv} PPV, {nb_fi} Farthest Insertion, {nb_grille} heuristique grille, {nb_aleatoire} aléatoires.")
@@ -282,12 +278,7 @@ class TSP_GA:
         return participants[0]
 
     def _croisement_OX(self, parent1: Route, parent2: Route) -> list[int]:
-        """exemple :  parent1 = [0 1 2|3 4 5|6 0]
-                      parent2 = [0 4 5 6 1 2 3 0]
-                      a=2, b=5
-                      enfant = [0 _ _ 3 4 5 _ 0]  copie du segment de parent1
-                      enfant = [0 6 1 3 4 5 2 0]  complété avec parent2 en conservant l'ordre
-        """
+        """Crossover OX."""
         p1 = parent1.ordre[1:-1]
         p2 = parent2.ordre[1:-1]
 
@@ -319,13 +310,16 @@ class TSP_GA:
         def swap(ordre) -> None:
             i, j = random.sample(indices, 2)
             ordre[i], ordre[j] = ordre[j], ordre[i]
+
         def inversion(ordre) -> None:
             i, j = sorted(random.sample(indices, 2))
             ordre[i:j] = reversed(ordre[i:j])
+
         def insertion(ordre) -> None:
             i, j = random.sample(indices, 2)
             lieu = ordre.pop(i)
             ordre.insert(j, lieu)
+
         def rotate(ordre) -> None:
             i, j = sorted(random.sample(indices, 2))
             segment = ordre[i:j]
@@ -352,16 +346,21 @@ class TSP_GA:
             if essais == 5:
                 ordre_enfant = parent1.ordre.copy()
                 self._mutation(ordre_enfant)
+                key = tuple(ordre_enfant)
+                if key in seen:
+                    continue
+                seen.add(key)
             else:
                 ordre_enfant = self._croisement_OX(parent1, parent2)
 
                 if random.random() < self.prob_mutation:
                     self._mutation(ordre_enfant)
 
-            key = tuple(ordre_enfant)
-            if key in seen:
-                continue
-            seen.add(key)
+                key = tuple(ordre_enfant)
+                if key in seen:
+                    # on ne l'ajoute pas, on essaie un autre enfant
+                    continue
+                seen.add(key)
 
             enfant = self._new_route(ordre_enfant.copy())
             enfants.append(enfant)
@@ -438,15 +437,20 @@ class TSP_GA:
 
 if __name__ == "__main__":
     # Exemple d'utilisation simple (sans IHM auto step-by-step)
-    graph = Graph(csv_path='fichiers_csv_exemples/graph_20.csv')
+    graph = Graph(100)
     affichage = Affichage(graph)
 
-    taille_pop = min(10, 2*graph.N) if graph.N < 500 else int(5*sqrt(graph.N))+900
+    # taille de population raisonnable
+    if graph.N < 500:
+        taille_pop = min(10, 2 * graph.N)
+    else:
+        taille_pop = int(5 * sqrt(graph.N)) + 900
+
     tsp_ga = TSP_GA(
         graph=graph,
         affichage=affichage,
-        taille_pop=graph.N,
-        taille_pop_enfants=int(graph.N * 0.7),
+        taille_pop=taille_pop,
+        taille_pop_enfants=int(taille_pop * 0.7),
         prob_mutation=0.2,
         nb_generations=1000
     )
