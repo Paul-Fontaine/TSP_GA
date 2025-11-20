@@ -139,9 +139,9 @@ class Graph:
         self.N = len(self.liste_lieux)
 
         #-------------------------------------------------------
-        # Limite stricte : 3 Go pour la matrice distances
+        # Limite stricte : 1 Go pour la matrice distances
         # ------------------------------------------------------
-        max_bytes = int(3 * 1024 * 1024 * 1024)  # 3 Go
+        max_bytes = int(1 * 1024 * 1024 * 1024)  # 1 Go
         needed_bytes = ((self.N * (self.N - 1)) // 2) * 4  # float32
 
         if needed_bytes <= max_bytes:
