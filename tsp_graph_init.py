@@ -522,10 +522,12 @@ if __name__ == "__main__":
     from math import sqrt
     from tsp_ga import TSP_GA
     # graph = Graph(csv_path="fichiers_csv_exemples/graph_20.csv")
-    graph = Graph(10000)
+    N = 1000
+    graph = Graph(N)
     affichage = Affichage(graph, titre="UI")
 
     taille_pop = max(10, 2 * graph.N) if graph.N < 500 else int(5 * sqrt(graph.N)) + 900
+    print(f"Initialisation GA avec taille_pop={taille_pop} pour N={graph.N}")
     tsp_ga = TSP_GA(
         graph=graph,
         affichage=affichage,
