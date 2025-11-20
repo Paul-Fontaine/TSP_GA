@@ -68,9 +68,8 @@ class TSP_GA:
 
         while ameliore:
             ameliore = False
-            # on utilise len(meilleure) pour refléter la route mise à jour
             for i in range(1, len(meilleure) - 3):
-                for j in range(i + 1, len(meilleure) - 1):
+                for j in range(i + 1, len(route) - 1):
                     candidate = Route(meilleure[:i] + meilleure[i:j][::-1] + meilleure[j:])
                     candidate.distance = self.graph.calcul_distance_route(candidate)
                     if candidate.distance < meilleure.distance:
@@ -200,7 +199,7 @@ class TSP_GA:
             nb_ppv = 0
             nb_fi = 0
             nb_grille = int(0.4 * taille_pop)
-            nb_aleatoire = taille_pop - nb_grille
+            nb_aleatoire = int(taille_pop - nb_grille)
         else:
             n_operations_max = 1e6
             pourcentage_aleatoire = 1 - n_operations_max / (taille_pop * self.N * self.N)
@@ -356,11 +355,10 @@ class TSP_GA:
                 if random.random() < self.prob_mutation:
                     self._mutation(ordre_enfant)
 
-                key = tuple(ordre_enfant)
-                if key in seen:
-                    # on ne l'ajoute pas, on essaie un autre enfant
-                    continue
-                seen.add(key)
+            key = tuple(ordre_enfant)
+            if key in seen:
+                continue
+            seen.add(key)
 
             enfant = self._new_route(ordre_enfant.copy())
             enfants.append(enfant)

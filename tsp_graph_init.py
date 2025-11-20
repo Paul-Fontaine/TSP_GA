@@ -138,9 +138,9 @@ class Graph:
         self.N = len(self.liste_lieux)
 
         #-------------------------------------------------------
-        # Limite stricte : 7.5 Go pour la matrice distances
+        # Limite stricte : 5 Go pour la matrice distances
         # ------------------------------------------------------
-        max_bytes = int(5 * 1024 * 1024 * 1024)  # 7.5 Go
+        max_bytes = int(5 * 1024 * 1024 * 1024)  # 5 Go
         needed_bytes = ((self.N * (self.N - 1)) // 2) * 4  # float32
 
         if needed_bytes <= max_bytes:
@@ -632,6 +632,7 @@ if __name__ == "__main__":
     affichage = Affichage(graph, titre="UI")
 
     taille_pop = max(10, 2 * graph.N) if graph.N < 500 else int(5 * sqrt(graph.N)) + 900
+    print(f"Initialisation GA avec taille_pop={taille_pop} pour N={graph.N}")
     tsp_ga = TSP_GA(
         graph=graph,
         affichage=affichage,
