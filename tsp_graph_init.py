@@ -139,9 +139,9 @@ class Graph:
         self.N = len(self.liste_lieux)
 
         #-------------------------------------------------------
-        # Limite stricte : 5 Go pour la matrice distances
+        # Limite stricte : 3 Go pour la matrice distances
         # ------------------------------------------------------
-        max_bytes = int(5 * 1024 * 1024 * 1024)  # 5 Go
+        max_bytes = int(3 * 1024 * 1024 * 1024)  # 3 Go
         needed_bytes = ((self.N * (self.N - 1)) // 2) * 4  # float32
 
         if needed_bytes <= max_bytes:
@@ -396,7 +396,7 @@ class Affichage:
         if start_auto and self.graph.N<=5000:
             self.start_auto()
         elif start_auto:
-            time.sleep(5)
+            time.sleep(15)
             self.start_auto()
 
     # --------------- Boucle auto ---------------
