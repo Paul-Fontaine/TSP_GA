@@ -193,12 +193,12 @@ class TSP_GA:
         if self.N > 10000:
             nb_ppv = 0
             nb_fi = 0
-            nb_grille = 1
+            nb_grille = 10
             nb_aleatoire = taille_pop - nb_grille
         elif self.N > 500:
             nb_ppv = 0
             nb_fi = 0
-            nb_grille = 5
+            nb_grille = 20
             nb_aleatoire = taille_pop - nb_grille
         elif self.N > 200:
             nb_ppv = 1
