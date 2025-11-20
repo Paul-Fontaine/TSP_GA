@@ -519,20 +519,20 @@ class Affichage:
 # Exécution directe
 # =========================
 if __name__ == "__main__":
-    from tsp_ga import TSP_GA  # adapte le nom du fichier si besoin
+    from math import sqrt
+    from tsp_ga import TSP_GA
     # graph = Graph(csv_path="fichiers_csv_exemples/graph_20.csv")
-    graph = Graph(csv_path="fichiers_csv_exemples/graph_20.csv")
-
-    graph = Graph(501)  # ou csv_path="fichiers_csv_exemples/graph_20.csv"
+    graph = Graph(10000)
     affichage = Affichage(graph, titre="UI")
 
+    taille_pop = max(10, 2 * graph.N) if graph.N < 500 else int(5 * sqrt(graph.N)) + 900
     tsp_ga = TSP_GA(
         graph=graph,
         affichage=affichage,
-        taille_pop=graph.N,
-        taille_pop_enfants=int(graph.N * 0.7),
+        taille_pop=taille_pop,
+        taille_pop_enfants=int(taille_pop * 0.7),
         prob_mutation=0.2,
-        nb_generations=1000,
+        nb_generations=10000
     )
 
     affichage.set_ga(tsp_ga)
