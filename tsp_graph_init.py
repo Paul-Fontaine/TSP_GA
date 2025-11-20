@@ -625,10 +625,22 @@ class Affichage:
 # Exécution directe avec arguments CLI
 # =========================
 if __name__ == "__main__":
+    import argparse
     from math import sqrt
     from tsp_ga import TSP_GA
-    # graph = Graph(csv_path="fichiers_csv_exemples/graph_20.csv")
-    graph = Graph(200)
+
+    parser = argparse.ArgumentParser(description="Run TSP GA with optional CSV or number of cities")
+    parser.add_argument("--csv", dest="csv_path", help="Path to CSV file with cities", default=None)
+    parser.add_argument("-n", dest="nb_lieux", type=int, help="Number of cities to generate (ignored if --csv provided)",
+                        default=200)
+    args = parser.parse_args()
+
+    # Build graph from CSV if provided, otherwise generate nb cities
+    if args.csv_path:
+        graph = Graph(csv_path=args.csv_path)
+    else:
+        graph = Graph(nb_lieux=args.nb_lieux)
+
     affichage = Affichage(graph, titre="UI")
 
     taille_pop = max(10, 2 * graph.N) if graph.N < 500 else int(5 * sqrt(graph.N)) + 900
