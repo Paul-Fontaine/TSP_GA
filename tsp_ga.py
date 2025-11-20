@@ -119,7 +119,7 @@ class TSP_GA:
            Complexité globale : O(N) (en pratique ~ O(N) car les cellules sont petites).
         """
 
-        nb_cellules = int(sqrt(self.N/15))  # 15 lieux par cellule en moyenne
+        nb_cellules = int(sqrt(self.N/25))  # 15 lieux par cellule en moyenne
 
         # 1. Récupérer limites du plan
         xs = [l.x for l in self.graph.liste_lieux]
