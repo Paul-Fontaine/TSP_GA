@@ -13,7 +13,12 @@ HAUTEUR = 600
 NB_LIEUX = 100000
 RAYON_LIEU = 12
 MARGE = 10
-NOM_GROUPE = "GROUPE_10"  
+NOM_GROUPE = "GROUPE_10"
+
+# Seuils d'affichage
+MAX_POINTS = 500        # au-delà, on n'affiche plus les points
+MAX_SEGMENTS = 3000     # au-delà, on ne trace pas plus de 3000 segments par route
+
 
 # =========================
 # Classe Lieu
@@ -48,11 +53,11 @@ class Route:
 
     def __getitem__(self, index):
         return self.ordre[index]
-    
+
     def ajouter_lieu(self, lieu_index: int):
         """Ajoute un lieu à la fin de la route."""
         self.ordre.append(lieu_index)
-        
+
     def inserer_lieu(self, index, position):
         """Insère un lieu à une position donnée."""
         if position < 0 or position > len(self.ordre) - 1:
@@ -71,22 +76,22 @@ class Route:
         idx_zero = self.ordre.index(0)
         nouvelle_ordre = self.ordre[idx_zero:] + self.ordre[1:idx_zero + 1]
         self.ordre = nouvelle_ordre
-    
+
     def __lt__(self, other: "Route"):
         """inférieur à en fonction de la distance totale"""
         return self.distance < other.distance
-    
+
     def __gt__(self, other: "Route"):
         """supérieur à en fonction de la distance totale"""
         return self.distance > other.distance
-    
+
     def __le__(self, other: "Route"):
         """inférieur ou égal en fonction de la distance totale"""
         return self.distance <= other.distance
 
     def __ge__(self, other: "Route"):
         """supérieur ou égal en fonction de la distance totale"""
-        return self.distance >= other.distance  
+        return self.distance >= other.distance
 
     def __eq__(self, other: "Route"):
         """deux routes sont égales si elles ont le même ordre de lieux"""
@@ -125,7 +130,7 @@ class Graph:
         else:
             self._generer_aleatoire(nb_lieux)
         self.N = len(self.liste_lieux)
-        
+
         self.calcul_matrice_cout_od()
 
     def _generer_aleatoire(self, nb_lieux):
@@ -181,7 +186,6 @@ class Graph:
         if not self.liste_lieux:
             raise ValueError("CSV vide ou illisible.")
 
-
     def calcul_matrice_cout_od(self):
         n = self.N
 
@@ -195,7 +199,7 @@ class Graph:
         # Distances euclidiennes vectorisées : d = sqrt((x_i - x_j)^2 + (y_i - y_j)^2)
         dx = xs[I] - xs[J]
         dy = ys[I] - ys[J]
-        dists = np.sqrt(dx*dx + dy*dy).astype(np.float32)
+        dists = np.sqrt(dx * dx + dy * dy).astype(np.float32)
 
         # Stockage dans le tableau triangulaire compact (n*(n-1)/2)
         self.matrice_od = dists  # 1D, compact
@@ -207,18 +211,14 @@ class Graph:
             if j < i:
                 i, j = j, i
             # Index dans le triangle supérieur (i < j)
-            return i * n - (i*(i+1))//2 + (j - i - 1)
+            return i * n - (i * (i + 1)) // 2 + (j - i - 1)
 
         self._tri_index = index
 
-
-    
     def distance_ij(self, i, j):
         if i == j:
             return 0.0
         return self.matrice_od[self._tri_index(i, j)]
-
-
 
     def plus_proche_voisin(self, i: int, visites: set) -> int:
         """
@@ -247,10 +247,6 @@ class Graph:
         return float(total)
 
 
-
-# =========================
-# Classe Affichage (auto-update sur amélioration)
-# =========================
 # =========================
 # Classe Affichage (auto-update sur amélioration + CLI friendly)
 # =========================
@@ -261,6 +257,7 @@ class Affichage:
     - Au-delà de 500 lieux, n'affiche plus les points (uniquement les tracés)
     - Affiche la meilleure route en bleu (pointillé)
     - Affiche jusqu'à 5 routes secondaires en gris **UNIQUEMENT** si P est activé
+    - Limite le nombre de segments tracés à MAX_SEGMENTS par route si N est grand
     - Lance l'algorithme en continu et NE REDESSINE que lorsqu'une meilleure distance est trouvée
     - Barre du bas :
         - à gauche : itération courante / nb générations + distance
@@ -349,7 +346,7 @@ class Affichage:
 
         # affiche l'état initial
         self.redraw_base()
-        self._draw_routes()          # d'abord les traits
+        self._draw_routes()            # d'abord les traits
         self._draw_points_if_needed()  # puis les points par-dessus
         self._update_status(gen=self._current_gen, nb_gen=tsp_ga.nb_generations)
 
@@ -460,10 +457,10 @@ class Affichage:
 
     def _draw_points_if_needed(self):
         """
-        Dessine les lieux uniquement si on a <= 500 points.
+        Dessine les lieux uniquement si on a <= MAX_POINTS points.
         Appelée APRÈS _draw_routes pour que les points soient au-dessus des traits.
         """
-        if len(self.graph.liste_lieux) <= 500:
+        if len(self.graph.liste_lieux) <= MAX_POINTS:
             self._draw_points()
 
     def _draw_points(self):
@@ -487,13 +484,29 @@ class Affichage:
                                         font=("Arial", 8), fill="#333333")
 
     def _draw_route(self, route: Route, color, dash, width):
+        """
+        Trace une route, mais limite le nombre de segments à MAX_SEGMENTS.
+        Ainsi :
+        - Pour N < 3000 : tous les segments sont tracés.
+        - Pour N >= 3000 : seuls les MAX_SEGMENTS premiers segments sont tracés.
+        """
         if route is None or not route.ordre or len(route.ordre) < 2:
             return
+
         pts = []
         for idx in route.ordre:
             lieu = self.graph.liste_lieux[idx]
             pts.append(self._to_canvas(lieu.x, lieu.y))
-        for (x1, y1), (x2, y2) in zip(pts[:-1], pts[1:]):
+
+        nb_segments = len(pts) - 1
+        if nb_segments <= 0:
+            return
+
+        max_segments = min(MAX_SEGMENTS, nb_segments)
+
+        for k in range(max_segments):
+            (x1, y1) = pts[k]
+            (x2, y2) = pts[k + 1]
             self.canvas.create_line(x1, y1, x2, y2, fill=color, width=width, dash=dash)
 
     def _draw_routes(self):
@@ -540,7 +553,7 @@ if __name__ == "__main__":
     from math import sqrt
     from tsp_ga import TSP_GA
     # graph = Graph(csv_path="fichiers_csv_exemples/graph_20.csv")
-    graph = Graph(10000)
+    graph = Graph(100)
     affichage = Affichage(graph, titre="UI")
 
     taille_pop = max(10, 2 * graph.N) if graph.N < 500 else int(5 * sqrt(graph.N)) + 900
