@@ -645,9 +645,7 @@ if __name__ == "__main__":
     else:
         graph = Graph(nb_lieux=args.nb_lieux)
 
-    affichage = Affichage(graph, titre="UI")
-
-    taille_pop = max(10, 2 * graph.N) if graph.N < 500 else int(5 * sqrt(graph.N)) + 900
+    taille_pop = max(2, 2 * graph.N) if graph.N < 500 else int(5 * sqrt(graph.N)) + 900
     print(f"Initialisation GA avec taille_pop={taille_pop} pour N={graph.N}")
     tsp_ga = TSP_GA(
         graph=graph,
