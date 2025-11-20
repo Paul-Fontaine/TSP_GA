@@ -537,62 +537,20 @@ class Affichage:
 # Exécution directe avec arguments CLI
 # =========================
 if __name__ == "__main__":
-    import sys
-    from tsp_ga import TSP_GA  # doit déjà importer Graph, Route, Lieu depuis ce fichier
+    from math import sqrt
+    from tsp_ga import TSP_GA
+    # graph = Graph(csv_path="fichiers_csv_exemples/graph_20.csv")
+    graph = Graph(10000)
+    affichage = Affichage(graph, titre="UI")
 
-    # Defaults
-    csv_path = None
-    nb_lieux = NB_LIEUX
-    taille_pop = None
-    nb_generations = 500
-    prob_mutation = 0.1
-
-    args = sys.argv[1:]
-    i = 0
-    while i < len(args):
-        arg = args[i]
-        if arg == "--csv" and i + 1 < len(args):
-            csv_path = args[i + 1]
-            i += 2
-        elif arg == "--n" and i + 1 < len(args):
-            nb_lieux = int(args[i + 1])
-            i += 2
-        elif arg == "--pop" and i + 1 < len(args):
-            taille_pop = int(args[i + 1])
-            i += 2
-        elif arg == "--gens" and i + 1 < len(args):
-            nb_generations = int(args[i + 1])
-            i += 2
-        elif arg == "--pm" and i + 1 < len(args):
-            prob_mutation = float(args[i + 1])
-            i += 2
-        else:
-            print(f"Argument inconnu ou incomplet ignoré : {arg}")
-            i += 1
-
-    # Construction du graph
-    if csv_path is not None:
-        graph = Graph(csv_path=csv_path)
-    else:
-        graph = Graph(nb_lieux=nb_lieux)
-
-    # Taille de population par défaut = N
-    if taille_pop is None:
-        taille_pop = graph.N
-    taille_pop_enfants = int(taille_pop * 0.7)
-
-    # UI
-    titre = f"TSP - {NOM_GROUPE}"
-    affichage = Affichage(graph, titre=titre)
-
-    # Algo génétique
+    taille_pop = max(10, 2 * graph.N) if graph.N < 500 else int(5 * sqrt(graph.N)) + 900
     tsp_ga = TSP_GA(
         graph=graph,
         affichage=affichage,
         taille_pop=taille_pop,
-        taille_pop_enfants=taille_pop_enfants,
-        prob_mutation=prob_mutation,
-        nb_generations=nb_generations,
+        taille_pop_enfants=int(taille_pop * 0.7),
+        prob_mutation=0.2,
+        nb_generations=10000
     )
 
     # Lancer
