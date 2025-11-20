@@ -139,36 +139,68 @@ class TSP_GA:
             grid[cx][cy].append(i)
 
         # 4. Construire la route en parcourant la grille
-        ordre = [0]
-        lieux_utilises = {0}
+        depart = random.choice(grid[0][0])
+        ordre = [depart]
+        lieux_utilises = {depart}
 
-        # complexité O(n) car chaque lieu est visité une seule fois
-        for cx in range(nb_cellules):
-            # Zigzag pour éviter des aller-retours trop longs
-            row_cells = range(nb_cellules) if cx % 2 == 0 else range(nb_cellules - 1, -1, -1)
-            for cy in row_cells:
-                for lieu in grid[cx][cy]:
-                    if lieu not in lieux_utilises:
-                        ordre.append(lieu)
-                        lieux_utilises.add(lieu)
+        # Ordre des lignes légèrement aléatoire pour varier les routes
+        rows = list(range(nb_cellules))
+        random.shuffle(rows)
+
+        for cx in rows:
+            # Pour chaque ligne, on décide un sens de parcours des colonnes
+            cols = list(range(nb_cellules))
+            if random.random() < 0.5:
+                cols.reverse()
+
+            for cy in cols:
+                if not grid[cx][cy]:
+                    continue
+
+                # Points de cette cellule qui ne sont pas encore utilisés
+                local_points = [i for i in grid[cx][cy] if i not in lieux_utilises]
+                if not local_points:
+                    continue
+
+                # On construit une sous-route locale par plus proche voisin
+                # en partant du dernier point global ajouté
+                last = ordre[-1]
+
+                while local_points:
+                    # choisit le point le plus proche de "last"
+                    nxt = min(
+                        local_points,
+                        key=lambda l: self.graph.distance_ij(last, l)
+                    )
+                    ordre.append(nxt)
+                    lieux_utilises.add(nxt)
+                    local_points.remove(nxt)
+                    last = nxt
 
         ordre.append(0)
-        return self._new_route(ordre)
+        route = self._new_route(ordre)
+        route.reordonner()
+        return route
 
     def _creer_pop_initiale(self, taille_pop: int) -> list[Route]:
         """Crée la population initiale en combinant les heuristiques plus proche voisin, farthest insertion
            et des routes aléatoires.
            Complexité : O(p*N²) avec p la taille de la population qui n'est pas générée aléatoirement."""
-        if self.N > 500:
+        if self.N > 10000:
             nb_ppv = 0
-            nb_fi = 0
+            nb_fi = 1
             nb_grille = 1
-            nb_aleatoire = taille_pop - 1
+            nb_aleatoire = taille_pop - nb_grille
+        elif self.N > 500:
+            nb_ppv = 2
+            nb_fi = 1
+            nb_grille = 5
+            nb_aleatoire = taille_pop - nb_grille
         elif self.N > 200:
-            nb_ppv = 0
-            nb_fi = 0
+            nb_ppv = 5
+            nb_fi = 1
             nb_grille = int(0.4 * taille_pop)
-            nb_aleatoire = int(taille_pop - nb_grille)
+            nb_aleatoire = taille_pop - nb_grille - nb_fi
         else:
             n_operations_max = 1e6
             pourcentage_aleatoire = 1 - n_operations_max / (taille_pop * self.N * self.N)
@@ -176,9 +208,9 @@ class TSP_GA:
             print(f"  - Pourcentage de routes aléatoires ajusté à {pourcentage_aleatoire*100:.2f}% pour limiter p*N² à {n_operations_max:.0f}.")
 
             nb_aleatoire = int(taille_pop * pourcentage_aleatoire)
-            nb_restant = taille_pop - nb_aleatoire
+            nb_restant = taille_pop - nb_aleatoire - 1
+            nb_fi = 1
             nb_grille = int(nb_restant / 2)
-            nb_fi = int(nb_restant / 4)
             nb_ppv = taille_pop - nb_aleatoire - nb_fi - nb_grille
         print(f"  - Création de la population initiale : {nb_ppv} PPV, {nb_fi} Farthest Insertion, {nb_grille} heuristiqu grille, {nb_aleatoire} aléatoires.")
 
