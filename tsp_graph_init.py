@@ -10,7 +10,7 @@ import tkinter as tk
 # =========================
 LARGEUR = 800
 HAUTEUR = 600
-NB_LIEUX = 499
+NB_LIEUX = 100000
 RAYON_LIEU = 12
 MARGE = 10
 NOM_GROUPE = "GROUPE_10"  
@@ -109,25 +109,53 @@ class Route:
 class Graph:
     """
     - Mémorise la liste des lieux
-    - Génère aléatoirement ou charge depuis CSV
-    - Calcule la matrice des distances (matrice_od)
-    - Fournit plus_proche_voisin(i, visites) (exigé par l'énoncé)
+    - Peut générer aléatoirement ou charger depuis CSV
+    - Peut calculer une matrice des distances (format triangulaire compact)
+    - Bascule automatiquement en mode "calcul à la demande" si trop gros
+    - Fournit distance_ij, plus_proche_voisin, calcul_distance_route
     """
+
     def __init__(self, nb_lieux=NB_LIEUX, csv_path=None, seed=None):
         if seed is not None:
             random.seed(seed)
 
         self.liste_lieux = []
         self.matrice_od = None
+        self._tri_index = None
+        self.use_matrix = False   # sera ajusté automatiquement
 
+        # Chargement ou génération
         if csv_path:
             self.charger_graph(csv_path)
         else:
             self._generer_aleatoire(nb_lieux)
-        self.N = len(self.liste_lieux)
-        
-        self.calcul_matrice_cout_od()
 
+        self.N = len(self.liste_lieux)
+
+        #-------------------------------------------------------
+        # Limite stricte : 7.5 Go pour la matrice distances
+        # ------------------------------------------------------
+        max_bytes = int(5 * 1024 * 1024 * 1024)  # 7.5 Go
+        needed_bytes = ((self.N * (self.N - 1)) // 2) * 4  # float32
+
+        if needed_bytes <= max_bytes:
+            self.use_matrix = True
+            print(f"[INFO] Matrice distances permise ({needed_bytes/1e9:.2f} Go).")
+            self.calcul_matrice_cout_od()
+        else:
+            self.use_matrix = False
+            print(f"[INFO] Matrice distances trop grosse ({needed_bytes/1e9:.2f} Go) : calcul direct.")
+
+
+        # Stockage vectorisé des coordonnées (utilisé même en mode matrice)
+        self.coords = np.array(
+            [(lieu.x, lieu.y) for lieu in self.liste_lieux],
+            dtype=np.float32
+        )
+
+    # ----------------------------------------------------------------------
+    # Génération / Chargement
+    # ----------------------------------------------------------------------
     def _generer_aleatoire(self, nb_lieux):
         self.liste_lieux = []
         for i in range(nb_lieux):
@@ -136,11 +164,6 @@ class Graph:
             self.liste_lieux.append(Lieu(x, y, nom=str(i)))
 
     def charger_graph(self, csv_path: str):
-        """
-        CSV acceptés (même structure que Moodle) :
-          - nom,x,y   (ou id,x,y)
-          - x,y       (nom auto: index de ligne)
-        """
         self.liste_lieux = []
         with open(csv_path, newline="", encoding="utf-8") as f:
             sample = f.read(1024)
@@ -175,95 +198,94 @@ class Graph:
                         x, y, nom = float(row[0]), float(row[1]), str(row[2])
                     else:
                         x, y, nom = float(row[0]), float(row[1]), str(i_ligne)
+
                 self.liste_lieux.append(Lieu(x, y, nom))
                 i_ligne += 1
 
         if not self.liste_lieux:
             raise ValueError("CSV vide ou illisible.")
 
-
+    # ----------------------------------------------------------------------
+    # Matrice triangulaire compacte
+    # ----------------------------------------------------------------------
     def calcul_matrice_cout_od(self):
         n = self.N
 
-        # Récupération des coordonnées dans des arrays NumPy
         xs = np.array([lieu.x for lieu in self.liste_lieux], dtype=np.float32)
         ys = np.array([lieu.y for lieu in self.liste_lieux], dtype=np.float32)
 
-        # Construction vectorisée des indices i<j
-        I, J = np.triu_indices(n, k=1)  # toutes les paires (i,j) avec i<j
+        I, J = np.triu_indices(n, k=1)
 
-        # Distances euclidiennes vectorisées : d = sqrt((x_i - x_j)^2 + (y_i - y_j)^2)
         dx = xs[I] - xs[J]
         dy = ys[I] - ys[J]
         dists = np.sqrt(dx*dx + dy*dy).astype(np.float32)
 
-        # Stockage dans le tableau triangulaire compact (n*(n-1)/2)
-        self.matrice_od = dists  # 1D, compact
+        self.matrice_od = dists
 
-        # Fonction index(i,j) => position dans ce tableau
         def index(i, j):
             if i == j:
-                raise ValueError("distance(i,i) non stockée")
+                return None
             if j < i:
                 i, j = j, i
-            # Index dans le triangle supérieur (i < j)
-            return i * n - (i*(i+1))//2 + (j - i - 1)
+            return i * n - (i * (i + 1)) // 2 + (j - i - 1)
 
         self._tri_index = index
 
-
-    
+    # ----------------------------------------------------------------------
+    # Distance
+    # ----------------------------------------------------------------------
     def distance_ij(self, i, j):
+        """Distance entre i et j, avec fallback en mode calcul direct."""
         if i == j:
             return 0.0
-        return self.matrice_od[self._tri_index(i, j)]
 
+        # ---------- MODE MATRICE (rapide) ----------
+        if self.use_matrix:
+            idx = self._tri_index(i, j)
+            return float(self.matrice_od[idx])
 
+        # ---------- MODE FALLBACK (distance à la demande) ----------
+        dx = self.coords[i, 0] - self.coords[j, 0]
+        dy = self.coords[i, 1] - self.coords[j, 1]
+        return float(np.sqrt(dx*dx + dy*dy))
 
+    # ----------------------------------------------------------------------
+    # Fonctions TSP
+    # ----------------------------------------------------------------------
     def plus_proche_voisin(self, i: int, visites: set) -> int:
-        """
-        Renvoie l'indice du plus proche voisin non encore visité depuis i.
-        (Conservée car demandée par l'énoncé, mais non utilisée ici.)
-        """
-        n = len(self.liste_lieux)
+        n = self.N
         best_j = None
         best_d = float("inf")
         for j in range(n):
             if j == i or j in visites:
                 continue
             d = self.distance_ij(i, j)
-
             if d < best_d:
                 best_d = d
                 best_j = j
         return best_j
 
     def calcul_distance_route(self, route: Route) -> float:
-        """Somme des distances le long de route.ordre (euclidienne)."""
         total = 0.0
         for a, b in zip(route.ordre[:-1], route.ordre[1:]):
             total += self.distance_ij(a, b)
-
         return float(total)
-
-
+    
 
 # =========================
-# Classe Affichage (auto-update sur amélioration)
-# =========================
-# =========================
-# Classe Affichage (auto-update sur amélioration)
+# Classe Affichage (auto-update sur amélioration + CLI friendly)
 # =========================
 class Affichage:
     """
     Affichage pour TSP_GA :
-    - Dessine les lieux (0 en rouge) + grille si N <= 1000
-    - Au-delà de 1000 lieux, n'affiche plus les points (uniquement les tracés)
+    - Dessine les lieux (0 en rouge) + grille si N <= 500
+    - Au-delà de 500 lieux, n'affiche plus les points (uniquement les tracés)
     - Affiche la meilleure route en bleu (pointillé)
     - Affiche jusqu'à 5 routes secondaires en gris **UNIQUEMENT** si P est activé
     - Lance l'algorithme en continu et NE REDESSINE que lorsqu'une meilleure distance est trouvée
     - Barre du bas :
         - à gauche : itération courante / nb générations + distance
+                     + "meilleure trouvée à l’itération k"
         - à droite : "Appuyer sur P pour afficher top N"
     """
 
@@ -277,6 +299,7 @@ class Affichage:
 
         self._show_population = False  # routes secondaires visibles ou non
         self._current_gen = 0          # itération courante
+        self._best_gen = 0             # itération où la meilleure route actuelle a été trouvée
 
         # ----- Fenêtre -----
         self.root = tk.Tk()
@@ -322,7 +345,7 @@ class Affichage:
         self._transform = None
         self._compute_transform()
 
-        # Premier dessin (fond + éventuels points)
+        # Premier dessin (fond uniquement, points seront redessinés avec les routes)
         self.redraw_base()
 
         # flag d'exécution auto
@@ -336,6 +359,7 @@ class Affichage:
 
         # reset compteur d'itérations
         self._current_gen = 0
+        self._best_gen = 0
 
         # récupère population & best initiaux
         self.population = sorted(list(tsp_ga.population))
@@ -346,7 +370,8 @@ class Affichage:
 
         # affiche l'état initial
         self.redraw_base()
-        self._draw_routes()
+        self._draw_routes()          # d'abord les traits
+        self._draw_points_if_needed()  # puis les points par-dessus
         self._update_status(gen=self._current_gen, nb_gen=tsp_ga.nb_generations)
 
         if start_auto:
@@ -387,11 +412,14 @@ class Affichage:
         if improved:
             self.best_route = current_best
             self.best_distance_affichee = current_best_dist
+            self._best_gen = self._current_gen  # nouvelle meilleure trouvée à cette itération
+
             # Redessine uniquement si on a mieux
             self.redraw_base()
             self._draw_routes()
+            self._draw_points_if_needed()
 
-        # Met à jour le texte de la barre (itération + distance) à chaque step
+        # Met à jour la barre (itération + distance + best_gen) à chaque step
         self._update_status(gen=self._current_gen, nb_gen=self.tsp_ga.nb_generations)
 
         # Replanifie la prochaine itération
@@ -403,6 +431,7 @@ class Affichage:
         # on redessine simplement en prenant en compte le nouveau flag
         self.redraw_base()
         self._draw_routes()
+        self._draw_points_if_needed()
 
     # --------------- Géométrie & mapping ---------------
     def _compute_transform(self):
@@ -434,14 +463,12 @@ class Affichage:
     # --------------- Dessin ---------------
     def redraw_base(self):
         """
-        Efface et redessine le fond.
-        Si le nombre de lieux > 1000 : on ne dessine **pas** les points (uniquement les tracés plus tard).
-        Sinon : on dessine la grille + les points.
+        Efface et redessine le fond (grille).
+        Les points sont dessinés ensuite par _draw_points_if_needed()
+        pour être AU-DESSUS des traits.
         """
         self.canvas.delete("all")
         self._draw_background()
-        if len(self.graph.liste_lieux) <= 500:
-            self._draw_points()
 
     def _draw_background(self):
         W = LARGEUR
@@ -452,10 +479,15 @@ class Affichage:
         for y in range(0, H, step):
             self.canvas.create_line(0, y, W, y, fill="#f0f0f0")
 
+    def _draw_points_if_needed(self):
+        """
+        Dessine les lieux uniquement si on a <= 500 points.
+        Appelée APRÈS _draw_routes pour que les points soient au-dessus des traits.
+        """
+        if len(self.graph.liste_lieux) <= 500:
+            self._draw_points()
+
     def _draw_points(self):
-        """
-        Dessine les lieux uniquement si on a <= 1000 points (filtré par redraw_base).
-        """
         r = RAYON_LIEU
         ordre_index = {}
         if self.best_route is not None:
@@ -486,6 +518,11 @@ class Affichage:
             self.canvas.create_line(x1, y1, x2, y2, fill=color, width=width, dash=dash)
 
     def _draw_routes(self):
+        """
+        Dessine les routes (traits) UNIQUEMENT.
+        Les points seront dessinés ensuite par _draw_points_if_needed()
+        pour rester au-dessus des traits.
+        """
         if not self.population:
             return
         pop_sorted = self.population
@@ -506,7 +543,10 @@ class Affichage:
             self.lbl_status_left.config(text="Itération : 0 / 0   |   Distance : -")
             return
 
-        txt = f"Itération : {gen} / {nb_gen}   |   Distance : {self.best_route.distance:.3f}"
+        txt = (
+            f"Itération : {gen} / {nb_gen}   |   Distance : {self.best_route.distance:.3f} "
+            f"(meilleure trouvée à l’itération {self._best_gen})"
+        )
         self.lbl_status_left.config(text=txt)
 
     # --------------- Boucle Tk ---------------
@@ -514,9 +554,8 @@ class Affichage:
         self.root.mainloop()
 
 
-
 # =========================
-# Exécution directe
+# Exécution directe avec arguments CLI
 # =========================
 if __name__ == "__main__":
     from math import sqrt
@@ -537,5 +576,6 @@ if __name__ == "__main__":
         nb_generations=10000
     )
 
+    # Lancer
     affichage.set_ga(tsp_ga)
     affichage.run()
