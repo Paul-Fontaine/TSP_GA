@@ -1,5 +1,4 @@
 import time
-from collections import defaultdict
 from math import sqrt
 from tsp_graph_init import Graph, Affichage, Route, Lieu
 import random
@@ -62,15 +61,16 @@ class TSP_GA:
 
     def _2_opt(self, route: Route) -> Route:
         """Amélioration locale sur une route en échangeant deux arêtes.
-           Compléxité : O(N²) pire cas, mais converge rapidement, car ça s'arrête dès qu'une amélioration est trouvée."""
+           Complexité : O(N²) pire cas, mais converge rapidement, car ça s'arrête dès qu'une amélioration est trouvée."""
         ameliore = True
         meilleure = route
         meilleure.distance = self.graph.calcul_distance_route(meilleure)
 
         while ameliore:
             ameliore = False
-            for i in range(1, len(route) - 3):
-                for j in range(i + 1, len(route) - 1):
+            # on utilise len(meilleure) pour refléter la route mise à jour
+            for i in range(1, len(meilleure) - 3):
+                for j in range(i + 1, len(meilleure) - 1):
                     candidate = Route(meilleure[:i] + meilleure[i:j][::-1] + meilleure[j:])
                     candidate.distance = self.graph.calcul_distance_route(candidate)
                     if candidate.distance < meilleure.distance:
@@ -79,8 +79,8 @@ class TSP_GA:
         return meilleure
 
     def _farthest_insertion(self) -> Route:
-        """Heuristique constructive : insère toujours la ville la plus éloignée
-           Compléxité : O(N²)"""
+        """Heuristique constructive : insère toujours la ville la plus éloignée.
+           Complexité : O(N²)"""
 
         max_d = -1
         depart, prochain_lieu = 0, None
@@ -95,7 +95,10 @@ class TSP_GA:
 
         while candidates:
             # trouve le lieu le plus éloigné de tous les lieux déjà dans la sous-route
-            lieu_loin = max(candidates, key=lambda l: min(self.graph.distance_ij(l, lieu) for lieu in ordre))
+            lieu_loin = max(
+                candidates,
+                key=lambda l: min(self.graph.distance_ij(l, lieu) for lieu in ordre)
+            )
             # Insère le lieu à la position optimale pour minimiser l'augmentation de distance
             best_pos = min(
                 range(1, len(ordre)),
@@ -103,8 +106,6 @@ class TSP_GA:
                     self.graph.distance_ij(ordre[i - 1], lieu_loin)
                     + self.graph.distance_ij(lieu_loin, ordre[i])
                     - self.graph.distance_ij(ordre[i - 1], ordre[i])
-                    if i < len(ordre)
-                    else self.graph.distance_ij(ordre[i - 1], lieu_loin)  # insert at the end case
                 )
             )
             ordre.insert(best_pos, lieu_loin)
@@ -113,11 +114,14 @@ class TSP_GA:
         return Route(ordre)
 
     def construire_tour_grille(self):
-        """découpe le plan en une grille puis parcourt les cellules de la grille
-           pour construire localement des sous-routes en zigzag.
-           Complexité : O(N) la plus faible possible sans aléatoire."""
+        """Découpe le plan en une grille puis parcourt les cellules de la grille
+           pour construire localement des sous-routes avec un plus proche voisin local.
+           Complexité globale : O(N) (en pratique ~ O(N) car les cellules sont petites).
+        """
 
-        nb_cellules = int(sqrt(self.N/15))  # 15 lieux par cellule en moyenne
+        # Nombre de cellules (~15 lieux par cellule) + variation légère
+        base = max(1, int(sqrt(self.N / 15)))
+        nb_cellules = max(1, base + random.randint(-1, 1))
 
         # 1. Récupérer limites du plan
         xs = [l.x for l in self.graph.liste_lieux]
@@ -125,14 +129,16 @@ class TSP_GA:
         min_x, max_x = min(xs), max(xs)
         min_y, max_y = min(ys), max(ys)
 
-        # Taille d'une cellule
-        cell_w = (max_x - min_x) / nb_cellules
-        cell_h = (max_y - min_y) / nb_cellules
+        # Taille d'une cellule (évite division par 0 si tous les points sont alignés)
+        w = max_x - min_x
+        h = max_y - min_y
+        cell_w = (w / nb_cellules) if w > 0 else 1.0
+        cell_h = (h / nb_cellules) if h > 0 else 1.0
 
-        # 2. Créer une grille vide : liste de listes
+        # 2. Créer une grille vide : grid[cx][cy] = liste d'indices de lieux
         grid = [[[] for _ in range(nb_cellules)] for _ in range(nb_cellules)]
 
-        # 3. Placer chaque ville dans la bonne cellule → O(n)
+        # 3. Placer chaque ville dans la bonne cellule → O(N)
         for i, lieu in enumerate(self.graph.liste_lieux):
             cx = min(int((lieu.x - min_x) / cell_w), nb_cellules - 1)
             cy = min(int((lieu.y - min_y) / cell_h), nb_cellules - 1)
@@ -142,18 +148,44 @@ class TSP_GA:
         ordre = [0]
         lieux_utilises = {0}
 
-        # complexité O(n) car chaque lieu est visité une seule fois
-        for cx in range(nb_cellules):
-            # Zigzag pour éviter des aller-retours trop longs
-            row_cells = range(nb_cellules) if cx % 2 == 0 else range(nb_cellules - 1, -1, -1)
-            for cy in row_cells:
-                for lieu in grid[cx][cy]:
-                    if lieu not in lieux_utilises:
-                        ordre.append(lieu)
-                        lieux_utilises.add(lieu)
+        # Ordre des lignes légèrement aléatoire pour varier les routes
+        rows = list(range(nb_cellules))
+        random.shuffle(rows)
 
+        for cx in rows:
+            # Pour chaque ligne, on décide un sens de parcours des colonnes
+            cols = list(range(nb_cellules))
+            if random.random() < 0.5:
+                cols.reverse()
+
+            for cy in cols:
+                if not grid[cx][cy]:
+                    continue
+
+                # Points de cette cellule qui ne sont pas encore utilisés
+                local_points = [i for i in grid[cx][cy] if i not in lieux_utilises]
+                if not local_points:
+                    continue
+
+                # On construit une sous-route locale par plus proche voisin
+                # en partant du dernier point global ajouté
+                last = ordre[-1]
+
+                while local_points:
+                    # choisit le point le plus proche de "last"
+                    nxt = min(
+                        local_points,
+                        key=lambda l: self.graph.distance_ij(last, l)
+                    )
+                    ordre.append(nxt)
+                    lieux_utilises.add(nxt)
+                    local_points.remove(nxt)
+                    last = nxt
+
+        # On boucle au départ
         ordre.append(0)
         return self._new_route(ordre)
+
 
     def _creer_pop_initiale(self, taille_pop: int) -> list[Route]:
         """Crée la population initiale en combinant les heuristiques plus proche voisin, farthest insertion
@@ -167,7 +199,7 @@ class TSP_GA:
         elif self.N > 200:
             nb_ppv = 0
             nb_fi = 0
-            nb_grille = 0.4 * taille_pop
+            nb_grille = int(0.4 * taille_pop)
             nb_aleatoire = taille_pop - nb_grille
         else:
             n_operations_max = 1e6
@@ -177,29 +209,32 @@ class TSP_GA:
 
             nb_aleatoire = int(taille_pop * pourcentage_aleatoire)
             nb_restant = taille_pop - nb_aleatoire
-            nb_grille = int(nb_restant / 2)
-            nb_fi = int(nb_restant / 4)
+            nb_grille = nb_restant // 2
+            nb_fi = nb_restant // 4
             nb_ppv = taille_pop - nb_aleatoire - nb_fi - nb_grille
-        print(f"  - Création de la population initiale : {nb_ppv} PPV, {nb_fi} Farthest Insertion, {nb_grille} heuristiqu grille, {nb_aleatoire} aléatoires.")
+
+        print(f"  - Création de la population initiale : {nb_ppv} PPV, {nb_fi} Farthest Insertion, {nb_grille} heuristique grille, {nb_aleatoire} aléatoires.")
 
         population = []
         seen = set()
 
         # 1) plus proche voisin + amélioration 2-opt
         start_time = time.time()
-        starts = random.sample(range(self.N), nb_ppv)
-        for start in starts:
-            route = self._route_plus_proche_voisin(start)
-            route = self._2_opt(route)
-            key = tuple(route.ordre)
-            if key not in seen:
-                seen.add(key)
-                route.distance = self.graph.calcul_distance_route(route)
-                population.append(route)
+        if nb_ppv > 0:
+            starts = random.sample(range(self.N), nb_ppv)
+            for start in starts:
+                route = self._route_plus_proche_voisin(start)
+                route = self._2_opt(route)
+                key = tuple(route.ordre)
+                if key not in seen:
+                    seen.add(key)
+                    route.distance = self.graph.calcul_distance_route(route)
+                    population.append(route)
         end_time = time.time()
         print(f"  - {nb_ppv} routes plus proche voisin créées en {end_time - start_time:.2f} secondes.")
 
         # 2) Farthest Insertion + amélioration 2-opt
+        start_time_fi = time.time()
         for _ in range(nb_fi):
             route = self._farthest_insertion()
             route = self._2_opt(route)
@@ -209,9 +244,10 @@ class TSP_GA:
                 route.distance = self.graph.calcul_distance_route(route)
                 population.append(route)
         end_time2 = time.time()
-        print(f"  - {nb_fi} routes farthest insertion créées en {end_time2 - end_time:.2f} secondes.")
+        print(f"  - {nb_fi} routes farthest insertion créées en {end_time2 - start_time_fi:.2f} secondes.")
 
         # 3) Grille
+        start_time_grid = time.time()
         for _ in range(int(nb_grille)):
             route = self.construire_tour_grille()
             key = tuple(route.ordre)
@@ -219,18 +255,18 @@ class TSP_GA:
                 seen.add(key)
                 population.append(route)
         end_time3 = time.time()
-        print(f"  - {int(nb_grille)} routes grille créées en {end_time3 - end_time2:.2f} secondes.")
+        print(f"  - {int(nb_grille)} routes grille créées en {end_time3 - start_time_grid:.2f} secondes.")
 
         # 4) Routes aléatoires
+        start_time_rand = time.time()
         while len(population) < taille_pop:
             ordre = [0] + random.sample(range(1, self.N), self.N - 1) + [0]
-
             key = tuple(ordre)
             if key not in seen:
                 seen.add(key)
                 population.append(self._new_route(ordre))
         end_time4 = time.time()
-        print(f"  - {nb_aleatoire} routes aléatoires créées en {end_time4 - end_time3:.2f} secondes.")
+        print(f"  - {taille_pop - (nb_ppv + nb_fi + int(nb_grille))} routes aléatoires créées en {end_time4 - start_time_rand:.2f} secondes.")
 
         return population
 
@@ -242,12 +278,7 @@ class TSP_GA:
         return participants[0]
 
     def _croisement_OX(self, parent1: Route, parent2: Route) -> list[int]:
-        """exemple :  parent1 = [0 1 2|3 4 5|6 0]
-                      parent2 = [0 4 5 6 1 2 3 0]
-                      a=2, b=5
-                      enfant = [0 _ _ 3 4 5 _ 0]  copie du segment de parent1
-                      enfant = [0 6 1 3 4 5 2 0]  complété avec parent2 en conservant l'ordre
-        """
+        """Crossover OX."""
         p1 = parent1.ordre[1:-1]
         p2 = parent2.ordre[1:-1]
 
@@ -279,13 +310,16 @@ class TSP_GA:
         def swap(ordre) -> None:
             i, j = random.sample(indices, 2)
             ordre[i], ordre[j] = ordre[j], ordre[i]
+
         def inversion(ordre) -> None:
             i, j = sorted(random.sample(indices, 2))
             ordre[i:j] = reversed(ordre[i:j])
+
         def insertion(ordre) -> None:
             i, j = random.sample(indices, 2)
             lieu = ordre.pop(i)
             ordre.insert(j, lieu)
+
         def rotate(ordre) -> None:
             i, j = sorted(random.sample(indices, 2))
             segment = ordre[i:j]
@@ -296,7 +330,7 @@ class TSP_GA:
 
     def _reproduction(self, k_tournoi: int = 2) -> list[Route]:
         """
-        Crée la population d'enfants avec un croisement OX, en évitant les doublons
+        Crée la population d'enfants avec un croisement OX, en évitant les doublons.
         """
         enfants: list[Route] = []
         seen = set()  # ordres déjà présents parmi les enfants
@@ -312,6 +346,10 @@ class TSP_GA:
             if essais == 5:
                 ordre_enfant = parent1.ordre.copy()
                 self._mutation(ordre_enfant)
+                key = tuple(ordre_enfant)
+                if key in seen:
+                    continue
+                seen.add(key)
             else:
                 ordre_enfant = self._croisement_OX(parent1, parent2)
 
@@ -399,15 +437,20 @@ class TSP_GA:
 
 if __name__ == "__main__":
     # Exemple d'utilisation simple (sans IHM auto step-by-step)
-    graph = Graph(csv_path='fichiers_csv_exemples/graph_20.csv')
+    graph = Graph(100)
     affichage = Affichage(graph)
 
-    taille_pop = min(10, 2*graph.N) if graph.N < 500 else int(5*sqrt(graph.N))+900
+    # taille de population raisonnable
+    if graph.N < 500:
+        taille_pop = min(10, 2 * graph.N)
+    else:
+        taille_pop = int(5 * sqrt(graph.N)) + 900
+
     tsp_ga = TSP_GA(
         graph=graph,
         affichage=affichage,
-        taille_pop=graph.N,
-        taille_pop_enfants=int(graph.N * 0.7),
+        taille_pop=taille_pop,
+        taille_pop_enfants=int(taille_pop * 0.7),
         prob_mutation=0.2,
         nb_generations=1000
     )

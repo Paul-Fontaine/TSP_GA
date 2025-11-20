@@ -280,19 +280,20 @@ class Graph:
 # =========================
 # Classe Affichage (auto-update sur amélioration + CLI friendly)
 # =========================
+# =========================
+# Classe Affichage (auto-update sur amélioration + CLI friendly)
+# =========================
 class Affichage:
     """
     Affichage pour TSP_GA :
-    - Dessine les lieux (0 en rouge) + grille si N <= 500
-    - Au-delà de 500 lieux, n'affiche plus les points (uniquement les tracés)
-    - Affiche la meilleure route en bleu (pointillé)
-    - Affiche jusqu'à 5 routes secondaires en gris **UNIQUEMENT** si P est activé
+    - N <= 500 : lieux + grille + meilleure route + routes secondaires (si P)
+    - 500 < N <= 10000 : pas de points, grille + routes (limitées en segments)
+    - N > 10000 : mode ultra simple :
+        * pas de grille (fond blanc)
+        * pas de points
+        * uniquement la meilleure route, fortement sous-échantillonnée
     - Limite le nombre de segments tracés à MAX_SEGMENTS par route si N est grand
-    - Lance l'algorithme en continu et NE REDESSINE que lorsqu'une meilleure distance est trouvée
-    - Barre du bas :
-        - à gauche : itération courante / nb générations + distance
-                     + "meilleure trouvée à l’itération k"
-        - à droite : "Appuyer sur P pour afficher top N"
+    - NE REDESSINE que lorsqu'une meilleure distance est trouvée
     """
 
     def __init__(self, graph: Graph, titre="TSP - Algorithme génétique (auto)"):
@@ -306,6 +307,15 @@ class Affichage:
         self._show_population = False  # routes secondaires visibles ou non
         self._current_gen = 0          # itération courante
         self._best_gen = 0             # itération où la meilleure route actuelle a été trouvée
+
+        # ----- Modes d'affichage selon N -----
+        self.N = self.graph.N
+        if self.N <= 500:
+            self._mode = "full"       # points + grille + routes + population P
+        elif self.N <= 10000:
+            self._mode = "medium"     # pas de points, grille + routes
+        else:
+            self._mode = "ultra"      # ultra simplifié : pas de grille, pas de points, meilleure route simplifiée
 
         # ----- Fenêtre -----
         self.root = tk.Tk()
@@ -336,7 +346,7 @@ class Affichage:
         # label droite : aide P
         self.lbl_status_right = tk.Label(
             status_frame,
-            text="Appuyer sur P pour afficher top N",
+            text="Appuyer sur P pour afficher top N" if self.N <= 10000 else "Mode ultra simple (N>10000)",
             bg="#e6e6e6",
             anchor="e"
         )
@@ -344,8 +354,10 @@ class Affichage:
 
         # Raccourcis utiles
         self.root.bind("<Escape>", lambda e: self.root.destroy())
-        self.root.bind("<Key-p>", self._toggle_population)
-        self.root.bind("<Key-P>", self._toggle_population)
+        # En mode ultra, la touche P n'a plus d'effet
+        if self._mode != "ultra":
+            self.root.bind("<Key-p>", self._toggle_population)
+            self.root.bind("<Key-P>", self._toggle_population)
 
         # Transform pour adapter les coordonnées au canvas
         self._transform = None
@@ -377,7 +389,7 @@ class Affichage:
         # affiche l'état initial
         self.redraw_base()
         self._draw_routes()            # d'abord les traits
-        self._draw_points_if_needed()  # puis les points par-dessus
+        self._draw_points_if_needed()  # puis les points par-dessus (si mode le permet)
         self._update_status(gen=self._current_gen, nb_gen=tsp_ga.nb_generations)
 
         if start_auto:
@@ -433,6 +445,9 @@ class Affichage:
 
     # --------------- Toggle population (touche P) ---------------
     def _toggle_population(self, _evt=None):
+        # En mode ultra, la population n'est jamais affichée
+        if self._mode == "ultra":
+            return
         self._show_population = not self._show_population
         # on redessine simplement en prenant en compte le nouveau flag
         self.redraw_base()
@@ -469,12 +484,16 @@ class Affichage:
     # --------------- Dessin ---------------
     def redraw_base(self):
         """
-        Efface et redessine le fond (grille).
-        Les points sont dessinés ensuite par _draw_points_if_needed()
-        pour être AU-DESSUS des traits.
+        Efface et redessine le fond.
+        - full / medium : grille
+        - ultra : fond blanc uniquement (pas de grille)
         """
         self.canvas.delete("all")
-        self._draw_background()
+        if self._mode in ("full", "medium"):
+            self._draw_background()
+        else:
+            # mode ultra : simple fond blanc (le bg du canvas suffit)
+            pass
 
     def _draw_background(self):
         W = LARGEUR
@@ -487,10 +506,12 @@ class Affichage:
 
     def _draw_points_if_needed(self):
         """
-        Dessine les lieux uniquement si on a <= MAX_POINTS points.
-        Appelée APRÈS _draw_routes pour que les points soient au-dessus des traits.
+        Dessine les lieux uniquement si :
+        - mode "full"
+        - et N <= MAX_POINTS
+        Pas de points en mode medium/ultra.
         """
-        if len(self.graph.liste_lieux) <= MAX_POINTS:
+        if self._mode == "full" and len(self.graph.liste_lieux) <= MAX_POINTS:
             self._draw_points()
 
     def _draw_points(self):
@@ -515,16 +536,30 @@ class Affichage:
 
     def _draw_route(self, route: Route, color, dash, width):
         """
-        Trace une route, mais limite le nombre de segments à MAX_SEGMENTS.
-        Ainsi :
-        - Pour N < 3000 : tous les segments sont tracés.
-        - Pour N >= 3000 : seuls les MAX_SEGMENTS premiers segments sont tracés.
+        Trace une route.
+        - N <= 10000 : on limite à MAX_SEGMENTS segments.
+        - N > 10000 (mode ultra) :
+            * sous-échantillonnage fort de la route ( ~1000 points max )
+            * segments également limités.
         """
         if route is None or not route.ordre or len(route.ordre) < 2:
             return
 
+        indices = route.ordre
+
+        # --- Mode ultra : gros sous-échantillonnage ---
+        if self._mode == "ultra":
+            # On vise environ 1000 points max
+            max_pts = 1000
+            step = max(1, len(indices) // max_pts)
+            if step > 1:
+                # on garde 0, step, 2*step, ... + dernier
+                indices = indices[::step]
+                if indices[-1] != route.ordre[-1]:
+                    indices = indices + [route.ordre[-1]]
+
         pts = []
-        for idx in route.ordre:
+        for idx in indices:
             lieu = self.graph.liste_lieux[idx]
             pts.append(self._to_canvas(lieu.x, lieu.y))
 
@@ -532,7 +567,12 @@ class Affichage:
         if nb_segments <= 0:
             return
 
-        max_segments = min(MAX_SEGMENTS, nb_segments)
+        # Limitation du nombre de segments
+        if self._mode == "ultra":
+            # on peut encore réduire un peu pour être sûr d'être léger
+            max_segments = min(MAX_SEGMENTS, nb_segments)
+        else:
+            max_segments = min(MAX_SEGMENTS, nb_segments)
 
         for k in range(max_segments):
             (x1, y1) = pts[k]
@@ -551,7 +591,12 @@ class Affichage:
         best = pop_sorted[0]
         others = pop_sorted[1:6]  # jusqu'à 5 suivantes
 
-        # routes secondaires en gris UNIQUEMENT si _show_population = True
+        # En mode ultra : uniquement la meilleure route, en bleu simple
+        if self._mode == "ultra":
+            self._draw_route(best, color="#0066cc", dash=None, width=1)
+            return
+
+        # modes full / medium : comportement d'origine
         if self._show_population:
             for r in others:
                 self._draw_route(r, color="#c0c0c0", dash=(2, 4), width=1)
@@ -583,7 +628,7 @@ if __name__ == "__main__":
     from math import sqrt
     from tsp_ga import TSP_GA
     # graph = Graph(csv_path="fichiers_csv_exemples/graph_20.csv")
-    graph = Graph(100)
+    graph = Graph(200)
     affichage = Affichage(graph, titre="UI")
 
     taille_pop = max(10, 2 * graph.N) if graph.N < 500 else int(5 * sqrt(graph.N)) + 900
