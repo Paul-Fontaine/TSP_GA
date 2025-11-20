@@ -135,7 +135,7 @@ class Graph:
         #-------------------------------------------------------
         # Limite stricte : 7.5 Go pour la matrice distances
         # ------------------------------------------------------
-        max_bytes = int(5 * 1024 * 1024 * 1024)  # 7.5 Go
+        max_bytes = int(5 * 1024 * 1024 * 1024)  # 5 Go
         needed_bytes = ((self.N * (self.N - 1)) // 2) * 4  # float32
 
         if needed_bytes <= max_bytes:
@@ -560,8 +560,7 @@ class Affichage:
 if __name__ == "__main__":
     from math import sqrt
     from tsp_ga import TSP_GA
-    # graph = Graph(csv_path="fichiers_csv_exemples/graph_20.csv")
-    graph = Graph(10000)
+    graph = Graph(csv_path="fichiers_csv_exemples/graph_20.csv")
     affichage = Affichage(graph, titre="UI")
 
     taille_pop = max(10, 2 * graph.N) if graph.N < 500 else int(5 * sqrt(graph.N)) + 900
