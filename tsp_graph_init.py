@@ -4,6 +4,7 @@ import csv
 import random
 import numpy as np
 import tkinter as tk
+import time
 
 # =========================
 # Constantes
@@ -392,7 +393,10 @@ class Affichage:
         self._draw_points_if_needed()  # puis les points par-dessus (si mode le permet)
         self._update_status(gen=self._current_gen, nb_gen=tsp_ga.nb_generations)
 
-        if start_auto:
+        if start_auto and self.graph.N<=5000:
+            self.start_auto()
+        elif start_auto:
+            time.sleep(5)
             self.start_auto()
 
     # --------------- Boucle auto ---------------
