@@ -192,16 +192,16 @@ class TSP_GA:
            Complexité : O(p*N²) avec p la taille de la population qui n'est pas générée aléatoirement."""
         if self.N > 10000:
             nb_ppv = 0
-            nb_fi = 1
+            nb_fi = 0
             nb_grille = 1
             nb_aleatoire = taille_pop - nb_grille
         elif self.N > 500:
-            nb_ppv = 2
-            nb_fi = 1
+            nb_ppv = 1
+            nb_fi = 0
             nb_grille = 5
             nb_aleatoire = taille_pop - nb_grille
         elif self.N > 200:
-            nb_ppv = 5
+            nb_ppv = 4
             nb_fi = 1
             nb_grille = int(0.4 * taille_pop)
             nb_aleatoire = taille_pop - nb_grille - nb_fi
