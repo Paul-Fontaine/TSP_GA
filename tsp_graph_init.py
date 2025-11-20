@@ -10,7 +10,7 @@ import tkinter as tk
 # =========================
 LARGEUR = 800
 HAUTEUR = 600
-NB_LIEUX = 499
+NB_LIEUX = 100000
 RAYON_LIEU = 12
 MARGE = 10
 NOM_GROUPE = "GROUPE_10"  
@@ -181,15 +181,44 @@ class Graph:
         if not self.liste_lieux:
             raise ValueError("CSV vide ou illisible.")
 
+
     def calcul_matrice_cout_od(self):
-        n = len(self.liste_lieux)
-        self.matrice_od = np.zeros((n, n), dtype=float)
-        for i in range(n):
-            for j in range(n):
-                if i == j:
-                    self.matrice_od[i, j] = 0.0
-                else:
-                    self.matrice_od[i, j] = self.liste_lieux[i].distance(self.liste_lieux[j])
+        n = self.N
+
+        # Récupération des coordonnées dans des arrays NumPy
+        xs = np.array([lieu.x for lieu in self.liste_lieux], dtype=np.float32)
+        ys = np.array([lieu.y for lieu in self.liste_lieux], dtype=np.float32)
+
+        # Construction vectorisée des indices i<j
+        I, J = np.triu_indices(n, k=1)  # toutes les paires (i,j) avec i<j
+
+        # Distances euclidiennes vectorisées : d = sqrt((x_i - x_j)^2 + (y_i - y_j)^2)
+        dx = xs[I] - xs[J]
+        dy = ys[I] - ys[J]
+        dists = np.sqrt(dx*dx + dy*dy).astype(np.float32)
+
+        # Stockage dans le tableau triangulaire compact (n*(n-1)/2)
+        self.matrice_od = dists  # 1D, compact
+
+        # Fonction index(i,j) => position dans ce tableau
+        def index(i, j):
+            if i == j:
+                raise ValueError("distance(i,i) non stockée")
+            if j < i:
+                i, j = j, i
+            # Index dans le triangle supérieur (i < j)
+            return i * n - (i*(i+1))//2 + (j - i - 1)
+
+        self._tri_index = index
+
+
+    
+    def distance_ij(self, i, j):
+        if i == j:
+            return 0.0
+        return self.matrice_od[self._tri_index(i, j)]
+
+
 
     def plus_proche_voisin(self, i: int, visites: set) -> int:
         """
@@ -202,7 +231,8 @@ class Graph:
         for j in range(n):
             if j == i or j in visites:
                 continue
-            d = self.matrice_od[i, j]
+            d = self.distance_ij(i, j)
+
             if d < best_d:
                 best_d = d
                 best_j = j
@@ -212,7 +242,8 @@ class Graph:
         """Somme des distances le long de route.ordre (euclidienne)."""
         total = 0.0
         for a, b in zip(route.ordre[:-1], route.ordre[1:]):
-            total += self.matrice_od[a, b]
+            total += self.distance_ij(a, b)
+
         return float(total)
 
 
